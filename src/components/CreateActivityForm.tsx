@@ -9,6 +9,9 @@ function twoDigits(n: number) {
 // using native time inputs for simpler, consistent mobile behavior
 
 export default function CreateActivityForm(): any {
+  const [routineExercises, setRoutineExercises] = useState<any[]>([]);
+  const [availableExercises, setAvailableExercises] = useState<any[]>([]);
+  const [searchTerms, setSearchTerms] = useState<Record<number, string | undefined>>({});
   const now = new Date();
   const startDefault = new Date(now.getTime() - 2 * 60 * 60 * 1000);
   const defaultDate = startDefault.toISOString().slice(0,10);
@@ -41,6 +44,35 @@ export default function CreateActivityForm(): any {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    fetch("/api/exercise/list")
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setAvailableExercises(data);
+        else if (Array.isArray(data.exercises)) setAvailableExercises(data.exercises);
+      })
+      .catch(() => setAvailableExercises([]));
+  }, []);
+
+  function startSearch(index: number, value: string) {
+    setSearchTerms(prev => ({ ...prev, [index]: value }));
+  }
+  
+  function closeSearch(index: number) {
+    setSearchTerms(prev => {
+      const copy = { ...prev };
+      delete copy[index];
+      return copy;
+    });
+  }
+  
+  function getFilteredExercises(index: number) {
+    const term = searchTerms[index]?.toLowerCase() ?? "";
+    return availableExercises.filter((e: any) =>
+      e.name.toLowerCase().includes(term)
+    );
+  }
+
   // native time inputs will handle hours/minutes on mobile devices
 
   return (
@@ -56,6 +88,7 @@ export default function CreateActivityForm(): any {
           }
           const payload: any = { startedAt: s.toISOString(), endedAt: ed.toISOString(), notes, type: activityType };
           if (selectedRoutineId) payload.routineId = selectedRoutineId;
+          if (routineExercises.length > 0) payload.exercises = routineExercises;
           const res = await fetch('/api/activities/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -110,7 +143,19 @@ export default function CreateActivityForm(): any {
 
       <div>
         <label className="block text-sm font-medium text-gray-200">Rutina (opcional)</label>
-        <select value={selectedRoutineId ?? ""} onChange={(e) => setSelectedRoutineId(e.target.value || null)} className="w-full mt-1 px-3 py-2 bg-gray-700 rounded">
+        <select value={selectedRoutineId ?? ""} onChange={(e) => { const id = e.target.value || null; setSelectedRoutineId(id); const r = routines.find(x => x.id === id);
+            if (r) {setRoutineExercises( r.exercises.map((ex: any) => ({
+              id: ex.id,
+              name: ex.name,
+              sets: ex.sets,
+              reps: ex.reps }))
+                );
+              } else {
+                setRoutineExercises([]);
+              }
+            }}
+            className="w-full mt-1 px-3 py-2 bg-gray-700 rounded"
+          >
           <option value="">-- Ninguna --</option>
           {routines.map(r => (
             <option key={r.id} value={r.id}>{r.name}</option>
@@ -118,22 +163,108 @@ export default function CreateActivityForm(): any {
         </select>
       </div>
 
-      {selectedRoutineId && (
-        (() => {
-          const r = routines.find(x => x.id === selectedRoutineId);
-          if (!r) return null;
-          return (
-            <div className="bg-gray-800 p-3 rounded">
-              <h3 className="font-medium">{r.name}</h3>
-              <ul className="text-sm text-gray-300 list-disc ml-5">
-                {r.exercises.map((ex: any) => (
-                  <li key={ex.id}>{ex.name} – {ex.sets}x{ex.reps}</li>
-                ))}
-              </ul>
-            </div>
-          );
-        })()
-      )}
+      {routineExercises.length > 0 && (
+          <div className="bg-gray-800 p-3 rounded space-y-2">
+            <h3 className="font-medium">Ejercicios</h3>
+
+            {routineExercises.map((ex, i) => (
+              <div key={i} className="grid grid-cols-4 gap-2 items-center">
+
+                <div className="col-span-2 relative">
+                  <input
+                    value={searchTerms[i] ?? ex.name ?? ""}
+                    onChange={(e) => startSearch(i, e.target.value)}
+                    placeholder="Buscar ejercicio..."
+                    className="w-full px-2 py-1 bg-gray-700 rounded"
+                  />
+
+                  {searchTerms[i] !== undefined && (
+                    <div className="absolute z-10 w-full bg-gray-900 max-h-40 overflow-y-auto rounded mt-1">
+                      {getFilteredExercises(i).map((e: any) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => {
+                            const copy = [...routineExercises];
+                            copy[i].exerciseId = e.id;
+                            copy[i].name = e.name;
+                            setRoutineExercises(copy);
+                            closeSearch(i);
+                          }}
+                          className="block w-full text-left px-3 py-2 hover:bg-gray-700"
+                        >
+                          {e.name}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const copy = [...routineExercises];
+                          copy[i].exerciseId = "__new";
+                          setRoutineExercises(copy);
+                          closeSearch(i);
+                        }}
+                        className="block w-full text-left px-3 py-2 text-indigo-400 hover:bg-gray-700"
+                      >
+                        ➕ Crear nuevo ejercicio
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {ex.exerciseId === "__new" && (
+                <input
+                  value={ex.newExerciseName || ""}
+                  onChange={(e) => {
+                    const copy = [...routineExercises];
+                    copy[i].newExerciseName = e.target.value;
+                    setRoutineExercises(copy);
+                  }}
+                  placeholder="Nombre del nuevo ejercicio"
+                  className="col-span-2 px-2 py-1 bg-gray-700 rounded"
+                />
+              )}
+
+                <input
+                  type="number"
+                  className="px-2 py-1 bg-gray-700 rounded"
+                  value={ex.sets}
+                  onChange={(e) => {
+                    const copy = [...routineExercises];
+                    copy[i].sets = Number(e.target.value);
+                    setRoutineExercises(copy);
+                  }}
+                />
+
+                <input
+                  type="number"
+                  className="px-2 py-1 bg-gray-700 rounded"
+                  value={ex.reps}
+                  onChange={(e) => {
+                    const copy = [...routineExercises];
+                    copy[i].reps = Number(e.target.value);
+                    setRoutineExercises(copy);
+                  }}
+                />
+
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={() =>
+                setRoutineExercises([
+                  ...routineExercises,
+                  { name: "", sets: 3, reps: 10 }
+                ])
+              }
+              className="text-sm px-3 py-1 bg-gray-700 rounded"
+            >
+              + Agregar ejercicio
+            </button>
+          </div>
+        )}
 
       <div className="flex gap-2">
         <button type="submit" disabled={saving} className="px-4 py-2 bg-indigo-600 rounded">{saving ? 'Guardando...' : 'Guardar actividad'}</button>
