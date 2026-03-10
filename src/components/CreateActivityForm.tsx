@@ -7,11 +7,14 @@ function twoDigits(n: number) {
   return String(n).padStart(2, "0");
 }
 
+
+
 export default function CreateActivityForm(): any {
 
   const [routineExercises, setRoutineExercises] = useState<any[]>([]);
   const [availableExercises, setAvailableExercises] = useState<any[]>([]);
   const [routines, setRoutines] = useState<any[]>([]);
+  const [exerciseError, setExerciseError] = useState("");
 
   const now = new Date();
   const startDefault = new Date(now.getTime() - 2 * 60 * 60 * 1000);
@@ -46,9 +49,33 @@ export default function CreateActivityForm(): any {
     setRoutineExercises(copy);
   }
 
+  function removeExercise(index: number) {
+    const copy = [...routineExercises];
+    copy.splice(index, 1);
+    setRoutineExercises(copy);
+  }
+
   async function handleSubmit(e: any) {
 
     e.preventDefault();
+
+    // VALIDACION
+    for (const ex of routineExercises) {
+
+      // caso 1: no eligio ejercicio
+      if (!ex.exerciseId) {
+        setExerciseError("Hay ejercicios sin seleccionar.");
+        return;
+      }
+
+      // caso 2: crear nuevo sin nombre
+      if (ex.exerciseId === "__new" && !ex.newExerciseName?.trim()) {
+        setExerciseError("Hay ejercicios nuevos sin nombre.");
+        return;
+      }
+    }
+
+    setExerciseError("");
     setSaving(true);
 
     const processedExercises = [];
@@ -210,6 +237,7 @@ export default function CreateActivityForm(): any {
               exercise={ex}
               availableExercises={availableExercises}
               onChange={updateExercise}
+              onRemove={removeExercise}
             />
           ))}
 
@@ -236,7 +264,11 @@ export default function CreateActivityForm(): any {
       >
         Guardar actividad
       </button>
-
+      {exerciseError && (
+        <div className="text-red-400 text-sm">
+          {exerciseError}
+        </div>
+      )}  
     </form>
   );
 }
