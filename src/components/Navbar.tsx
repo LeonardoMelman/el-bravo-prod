@@ -7,11 +7,11 @@ type NavbarProps = {
 
 export default function Navbar({ userName, photoUrl }: NavbarProps) {
   return (
-    <header className="w-full h-14 px-6 bg-surface ">
+    <header className="w-full h-14 px-6 bg-[#3b4f6c]">
       <div className="mx-auto max-w-7xl h-full flex items-center justify-between">
         {/* Logo */}
         <div className="text-white font-semibold text-lg">
-          Logo
+          El Bravo
         </div>
 
         {/* User info */}
@@ -20,20 +20,26 @@ export default function Navbar({ userName, photoUrl }: NavbarProps) {
             Hola, <span className="font-bold">{userName}</span>
           </span>
 
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center">
-            {photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={photoUrl}
-                alt={userName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-xs text-white">
-                {userName.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
+          <a
+            href="/profile"
+            aria-label="Ir a mi perfil"
+            className="block"
+          >
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-900 border-b border-slate-700 flex items-center justify-center hover:opacity-90 transition">
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photoUrl}
+                  alt={userName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xs text-white">
+                  {userName.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </a>
         </div>
       </div>
     </header>

@@ -4,76 +4,97 @@ import { prisma } from "@/src/lib/db";
 import LogoutButton from "@/src/components/LogoutButton";
 import EditSeasonForm from "@/src/components/EditSeasonForm";
 
-type Params = { id: string; seasonId: string };
+function toDateInputValue(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeAllowedActivityTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return ["gym"];
+
+  const filtered = value.filter((item): item is string => typeof item === "string");
+  return filtered.length > 0 ? Array.from(new Set(filtered)) : ["gym"];
+}
 
 export default async function EditSeasonPage({
   params,
 }: {
-  // ✅ Next te lo está pasando como Promise (por eso el error que viste)
-  params: Promise<Params>;
+  params: Promise<{ id: string; seasonId: string }>;
 }) {
   const { id: groupId, seasonId } = await params;
 
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // Solo admin puede editar
   const membership = await prisma.groupMember.findFirst({
-    where: { userId: user.id, groupId, leftAt: null },
-    select: { role: true },
+    where: {
+      userId: user.id,
+      groupId,
+      leftAt: null,
+    },
+    select: {
+      role: true,
+    },
   });
 
   if (!membership) redirect(`/group/${groupId}`);
   if (membership.role !== "admin") redirect(`/group/${groupId}`);
 
   const season = await prisma.season.findFirst({
-    where: { id: seasonId, groupId },
+    where: {
+      id: seasonId,
+      groupId,
+    },
     select: {
       id: true,
       name: true,
+      description: true,
       startDate: true,
       endDate: true,
-      minPerWeek: true,
+      weeklyGoal: true,
+      allowedActivityTypes: true,
     },
   });
 
   if (!season) redirect(`/group/${groupId}`);
 
-  const isFinished = new Date(season.endDate).getTime() < Date.now();
-
   return (
-    <main className="min-h-screen bg-gray-900 p-6 text-white">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-4 flex items-center justify-between gap-2">
+    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <a
             href={`/group/${groupId}`}
-            className="inline-flex items-center px-3 py-2 bg-gray-700 rounded-md text-sm hover:bg-gray-600"
+            className="inline-flex items-center rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
           >
             ← Volver al grupo
           </a>
+
           <LogoutButton />
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 shadow">
-          <h1 className="text-2xl font-semibold mb-4">Editar temporada</h1>
-
-          {isFinished ? (
-            <p className="text-sm text-yellow-300 mb-4">
-              Esta temporada ya terminó. No se puede editar.
+        <section className="rounded-[28px] bg-slate-800/85 p-6 shadow-2xl">
+          <div className="mb-6">
+            <h1 className="text-4xl font-bold text-white">Editar temporada</h1>
+            <p className="mt-2 text-sm text-slate-400">
+              Ajustá nombre, fechas, objetivo semanal y tipos de actividad que suman puntos.
             </p>
-          ) : null}
+          </div>
 
           <EditSeasonForm
             groupId={groupId}
-            season={{
-              id: season.id,
-              name: season.name,
-              startDate: season.startDate,
-              endDate: season.endDate,
-              minPerWeek: season.minPerWeek ?? 2,
-            }}
+            seasonId={season.id}
+            initialName={season.name}
+            initialDescription={season.description ?? ""}
+            initialStartDate={toDateInputValue(season.startDate)}
+            initialEndDate={toDateInputValue(season.endDate)}
+            initialWeeklyGoal={season.weeklyGoal}
+            initialAllowedActivityTypes={normalizeAllowedActivityTypes(
+              season.allowedActivityTypes
+            )}
           />
-        </div>
+        </section>
       </div>
     </main>
   );

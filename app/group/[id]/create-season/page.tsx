@@ -3,12 +3,28 @@
 import React, { useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
+type ActivityTypeOption = {
+  value: string;
+  label: string;
+};
+
+const ACTIVITY_TYPE_OPTIONS: ActivityTypeOption[] = [
+  { value: "gym", label: "Gimnasio" },
+  { value: "run", label: "Running" },
+  { value: "sport", label: "Deporte" },
+  { value: "mobility", label: "Movilidad" },
+  { value: "other", label: "Otro" },
+];
+
 function toDateInputValue(d: Date) {
-  // YYYY-MM-DD en horario local
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getActivityTypeLabel(type: string) {
+  return ACTIVITY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
 }
 
 export default function CreateSeasonPage() {
@@ -23,41 +39,88 @@ export default function CreateSeasonPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [minPerWeek, setMinPerWeek] = useState(2);
+  const [allowedActivityTypes, setAllowedActivityTypes] = useState<string[]>(["gym"]);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const next = () => setStep((s) => Math.min(s + 1, 3));
-  const back = () => setStep((s) => Math.max(s - 1, 0));
+  const totalSteps = 5;
 
-  function validateAll(): string | null {
+  const stepTitles = [
+    "Detalles",
+    "Fechas",
+    "Objetivo",
+    "Actividades permitidas",
+    "Confirmar",
+  ];
+
+  function toggleActivityType(value: string) {
+    setAllowedActivityTypes((current) => {
+      if (current.includes(value)) {
+        if (current.length === 1) return current;
+        return current.filter((item) => item !== value);
+      }
+      return [...current, value];
+    });
+  }
+
+  function next() {
+    setStep((s) => Math.min(s + 1, totalSteps - 1));
+  }
+
+  function back() {
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
+  function validateStep(currentStep: number): string | null {
     if (!groupId) return "No se encontró el grupo";
-    if (!name.trim()) return "El nombre de la temporada es requerido";
-    if (!startDate || !endDate) return "Fechas incorrectas";
 
-    // reglas: no pasado + end >= start
-    if (startDate < todayStr) return "La fecha de inicio no puede ser en el pasado";
-    if (endDate < todayStr) return "La fecha de fin no puede ser en el pasado";
-    if (endDate < startDate) return "La fecha de fin no puede ser anterior a la de inicio";
+    if (currentStep === 0) {
+      if (!name.trim()) return "El nombre de la temporada es requerido";
+    }
 
-    if (!Number.isFinite(minPerWeek) || minPerWeek < 1 || minPerWeek > 7) {
-      return "El objetivo debe estar entre 1 y 7";
+    if (currentStep === 1) {
+      if (!startDate || !endDate) return "Fechas incorrectas";
+      if (startDate < todayStr) return "La fecha de inicio no puede ser en el pasado";
+      if (endDate < todayStr) return "La fecha de fin no puede ser en el pasado";
+      if (endDate < startDate) return "La fecha de fin no puede ser anterior a la de inicio";
+    }
+
+    if (currentStep === 2) {
+      if (!Number.isFinite(minPerWeek) || minPerWeek < 1 || minPerWeek > 7) {
+        return "El objetivo debe estar entre 1 y 7";
+      }
+    }
+
+    if (currentStep === 3) {
+      if (allowedActivityTypes.length === 0) {
+        return "Tenés que seleccionar al menos un tipo de actividad permitido";
+      }
     }
 
     return null;
   }
 
-  async function handleCreate(e?: React.FormEvent) {
-    e?.preventDefault();
+  function validateAll(): string | null {
+    for (let i = 0; i < totalSteps - 1; i += 1) {
+      const err = validateStep(i);
+      if (err) return err;
+    }
+    return null;
+  }
+
+  async function handleCreate() {
     setError(null);
 
     const err = validateAll();
     if (err) {
       setError(err);
-      // te manda al paso correcto
+
       if (err.includes("nombre")) setStep(0);
       else if (err.includes("fecha")) setStep(1);
       else if (err.includes("objetivo")) setStep(2);
+      else if (err.includes("actividad")) setStep(3);
+
       return;
     }
 
@@ -66,10 +129,19 @@ export default function CreateSeasonPage() {
       const res = await fetch("/api/seasons/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, name, startDate, endDate, minPerWeek, description }),
+        body: JSON.stringify({
+          groupId,
+          name,
+          startDate,
+          endDate,
+          minPerWeek,
+          allowedActivityTypes,
+          description,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
         setError(data?.error || "Error creando la temporada");
         setLoading(false);
@@ -86,72 +158,119 @@ export default function CreateSeasonPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-900 text-white p-6 flex items-center justify-center">
-      <div className="w-full max-w-xl">
-        <div className="bg-gray-800 rounded-lg shadow p-6">
-          <h1 className="text-2xl font-semibold mb-4">Crear temporada</h1>
+    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+          >
+            ← Volver atrás
+          </button>
+        </div>
 
-          <div className="mb-4">
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-300">Paso {step + 1} de 4</div>
-            </div>
+        <section className="rounded-[28px] bg-slate-800/85 p-6 shadow-2xl">
+          <div className="mb-6">
+            <h1 className="text-4xl font-bold text-white">Crear temporada</h1>
+            <p className="mt-2 text-sm text-slate-400">
+              Definí fechas, objetivo semanal y qué tipos de entrenamiento van a sumar puntos.
+            </p>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              if (step !== 3) {
-                e.preventDefault();
-                return;
-              }
-              handleCreate(e);
-            }}
-            className="space-y-4"
-          >
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+            {stepTitles.map((title, index) => {
+              const isActive = index === step;
+              const isDone = index < step;
+
+              return (
+                <div
+                  key={title}
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    isActive
+                      ? "border-lime-500 bg-slate-900 text-white"
+                      : isDone
+                      ? "border-slate-700 bg-slate-900/70 text-slate-300"
+                      : "border-slate-700 bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  <div className="text-xs uppercase tracking-wide text-slate-400">
+                    Paso {index + 1}
+                  </div>
+                  <div className="mt-1 font-semibold">{title}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-2xl bg-slate-900/70 p-5">
             {step === 0 && (
-              <div>
-                <label className="block text-sm text-gray-200 mb-1">Nombre de la temporada</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md"
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Nombre de la temporada
+                  </label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ej. Abril Explosivo"
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-500/60"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Descripción
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    placeholder="Contá de qué se trata esta temporada."
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-500/60"
+                  />
+                </div>
               </div>
             )}
 
             {step === 1 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm text-gray-200 mb-1">Fecha inicio</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Fecha de inicio
+                  </label>
                   <input
                     type="date"
                     value={startDate}
                     min={todayStr}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setStartDate(v);
-                      // si endDate quedó inválida, la movemos al menos a startDate
-                      if (endDate && endDate < v) setEndDate(v);
+                      const value = e.target.value;
+                      setStartDate(value);
+                      if (endDate && endDate < value) setEndDate(value);
                     }}
-                    className="w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md"
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm text-gray-200 mb-1">Fecha fin</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Fecha de fin
+                  </label>
                   <input
                     type="date"
                     value={endDate}
                     min={startDate || todayStr}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md"
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
                   />
                 </div>
               </div>
             )}
 
             {step === 2 && (
-              <div>
-                <label className="block text-sm text-gray-200 mb-1">
-                  Objetivo (entrenos mínimos por semana)
+              <div className="max-w-sm">
+                <label className="mb-2 block text-sm font-semibold text-slate-200">
+                  Objetivo semanal
                 </label>
                 <input
                   type="number"
@@ -160,83 +279,153 @@ export default function CreateSeasonPage() {
                   value={minPerWeek}
                   onChange={(e) => setMinPerWeek(Number(e.target.value))}
                   onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-                  className="w-28 px-3 py-2 bg-gray-700 text-white border border-gray-600 rounded-md"
+                  className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
                 />
+                <p className="mt-2 text-sm text-slate-400">
+                  Cantidad mínima de entrenamientos por semana para cumplir el objetivo.
+                </p>
               </div>
             )}
 
             {step === 3 && (
               <div>
-                <h3 className="text-lg font-medium mb-2">Confirma los datos</h3>
-                <div className="space-y-2 text-sm text-gray-300">
-                  <div><strong>Nombre:</strong> {name || "—"}</div>
-                  <div><strong>Inicio:</strong> {startDate || "—"}</div>
-                  <div><strong>Fin:</strong> {endDate || "—"}</div>
-                  <div><strong>Objetivo:</strong> {minPerWeek} por semana</div>
-                  <div><strong>Descripción:</strong> {description || "—"}</div>
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-white">Tipos permitidos</h2>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Solo estos tipos de actividad van a sumar puntos en esta temporada.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {ACTIVITY_TYPE_OPTIONS.map((option) => {
+                    const selected = allowedActivityTypes.includes(option.value);
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => toggleActivityType(option.value)}
+                        className={`rounded-2xl border px-4 py-4 text-left transition ${
+                          selected
+                            ? "border-lime-500 bg-lime-500/10 text-white"
+                            : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                        }`}
+                      >
+                        <div className="font-semibold">{option.label}</div>
+                        <div className="mt-1 text-sm text-slate-400">
+                          {selected ? "Incluido en el score" : "No suma puntos"}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={back}
-                className="px-3 py-2 bg-gray-700 rounded-md text-white disabled:opacity-50"
-                disabled={step === 0 || loading}
-              >
-                Atrás
-              </button>
+            {step === 4 && (
+              <div>
+                <h2 className="mb-4 text-xl font-semibold text-white">Confirmar temporada</h2>
 
-              {step < 3 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // validación por paso (simple)
-                    setError(null);
-                    if (step === 0 && !name.trim()) {
-                      setError("El nombre de la temporada es requerido");
-                      return;
-                    }
-                    if (step === 1) {
-                      if (!startDate || !endDate) { setError("Fechas incorrectas"); return; }
-                      if (startDate < todayStr) { setError("La fecha de inicio no puede ser en el pasado"); return; }
-                      if (endDate < (startDate || todayStr)) { setError("La fecha de fin no puede ser anterior a la de inicio"); return; }
-                    }
-                    if (step === 2 && (!Number.isFinite(minPerWeek) || minPerWeek < 1 || minPerWeek > 7)) {
-                      setError("El objetivo debe estar entre 1 y 7");
-                      return;
-                    }
-                    next();
-                  }}
-                  className="px-4 py-2 bg-indigo-600 rounded-md text-white disabled:opacity-50"
-                  disabled={loading}
-                >
-                  Siguiente
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-green-600 rounded-md text-white disabled:opacity-50"
-                >
-                  {loading ? "Creando..." : "Crear temporada"}
-                </button>
-              )}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl bg-slate-800 p-4">
+                    <div className="text-sm text-slate-400">Nombre</div>
+                    <div className="mt-1 font-semibold text-white">{name || "—"}</div>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => router.push(`/group/${groupId}`)}
-                className="ml-auto px-3 py-2 bg-gray-600 rounded-md text-white disabled:opacity-50"
-                disabled={loading}
-              >
-                Cancelar
-              </button>
+                  <div className="rounded-2xl bg-slate-800 p-4">
+                    <div className="text-sm text-slate-400">Objetivo semanal</div>
+                    <div className="mt-1 font-semibold text-white">
+                      {minPerWeek} entrenamiento{minPerWeek === 1 ? "" : "s"} por semana
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-800 p-4">
+                    <div className="text-sm text-slate-400">Inicio</div>
+                    <div className="mt-1 font-semibold text-white">{startDate || "—"}</div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-800 p-4">
+                    <div className="text-sm text-slate-400">Fin</div>
+                    <div className="mt-1 font-semibold text-white">{endDate || "—"}</div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-800 p-4 md:col-span-2">
+                    <div className="text-sm text-slate-400">Tipos permitidos</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {allowedActivityTypes.map((type) => (
+                        <span
+                          key={type}
+                          className="rounded-full bg-slate-700 px-3 py-1 text-sm text-white"
+                        >
+                          {getActivityTypeLabel(type)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-800 p-4 md:col-span-2">
+                    <div className="text-sm text-slate-400">Descripción</div>
+                    <div className="mt-1 text-white">{description || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error ? (
+            <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {error}
             </div>
+          ) : null}
 
-            {error && <p className="text-sm text-red-400">{error}</p>}
-          </form>
-        </div>
+          <div className="mt-6 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={back}
+              disabled={step === 0 || loading}
+              className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Atrás
+            </button>
+
+            {step < totalSteps - 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  const err = validateStep(step);
+                  if (err) {
+                    setError(err);
+                    return;
+                  }
+                  next();
+                }}
+                disabled={loading}
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={loading}
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Creando..." : "Confirmar y crear temporada"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => router.push(`/group/${groupId}`)}
+              disabled={loading}
+              className="ml-auto rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </section>
       </div>
     </main>
   );

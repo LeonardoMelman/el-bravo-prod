@@ -1,20 +1,30 @@
-// app/layout.tsx
-
-import type { Metadata } from "next";
-import { Rubik } from "next/font/google";
 import "./globals.css";
+import type { Metadata } from "next";
+import { getCurrentUser } from "@/src/lib/currentUser";
+import AppNavbarShell from "@/src/components/AppNavbarShell";
 
-const rubik = Rubik({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
+export const metadata: Metadata = {
+  title: "El Bravo",
+  description: "El Bravo App",
+};
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: {
+  children: React.ReactNode;
+}) {
+  const user = await getCurrentUser();
+
   return (
-    <html lang="en">
-      <body className={rubik.className}>
+    <html lang="es">
+      <body className="bg-[#08142d] text-white">
+        {user ? (
+          <AppNavbarShell
+            userName={user.name ?? user.email ?? "Usuario"}
+            photoUrl={user.photoUrl ?? null}
+          />
+        ) : null}
+
         {children}
       </body>
     </html>

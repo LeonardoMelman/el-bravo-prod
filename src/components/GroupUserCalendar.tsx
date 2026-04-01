@@ -151,29 +151,26 @@ export default function GroupUserCalendar({
   }, [weeks]);
 
   function getWeekKind(weekWorkouts: number): WeekKind {
-    console.log("weekWorkouts", weekWorkouts, "weeklyRequired", weeklyRequired);
     if (weekWorkouts >= weeklyRequired) return "golden";
     if (weekWorkouts >= 1 && weekWorkouts < weeklyRequired) return "common";
     return "none";
   }
 
   function weekBgClass(kind: WeekKind) {
-    if (kind === "golden") return "bg-calendarweekgoldenstreak";
-    if (kind === "common") return "bg-calendarweekcommonstreak";
-    return "bg-calendarweek";
+    if (kind === "golden") return "bg-[rgba(132,210,127,0.18)]";
+    if (kind === "common") return "bg-[#314766]";
+    return "bg-slate-700";
   }
 
-  function dayBgVar(kind: WeekKind, isWorkoutDay: boolean) {
+  function dayBgVar(_kind: WeekKind, isWorkoutDay: boolean) {
     if (!isWorkoutDay) return "";
-    if (kind === "golden") return "var(--color-calendargreen)";
-    if (kind === "common") return "var(--color-calendargray)";
-    return "";
+    return "#65a30d"; // equivalente aprox de bg-lime-600
   }
 
-  function dayTextClass(isWorkoutDay: boolean, kind: WeekKind, dim: boolean) {
-    if (dim) return "text-graytext/40";
-    if (isWorkoutDay && (kind === "golden" || kind === "common")) return "text-white";
-    return "text-graytext";
+  function dayTextClass(isWorkoutDay: boolean, _kind: WeekKind, dim: boolean) {
+    if (dim) return "text-slate-400";
+    if (isWorkoutDay) return "text-white";
+    return "text-slate-400";
   }
 
   // Render del círculo del día con badge x2/x3/x4
@@ -209,7 +206,7 @@ export default function GroupUserCalendar({
         {/* badge xN solo si hay más de 1 workout */}
         {count > 1 && (
           <div
-            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center text-[10px] text-white leading-none pointer-events-none"
+            className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#243754] text-[10px] leading-none text-white pointer-events-none"
           >
             x{count}
           </div>
@@ -292,7 +289,7 @@ export default function GroupUserCalendar({
           return (
             <div
               key={`month-${day.toISOString()}`}
-              className="absolute text-[12px] font-medium text-gray-400 pointer-events-none bg-calendarweek px-3 rounded-t-md"
+              className="absolute rounded-t-md bg-[#1f2f4a] px-3 text-[12px] font-medium text-slate-300 pointer-events-none"
               style={{
                 left: centerLeft,
                 top: MONTH_LABEL_TOP,
@@ -307,7 +304,7 @@ export default function GroupUserCalendar({
         {/* Rayita en overlay: NO afecta el layout, y queda POR DEBAJO del pill */}
         {hasToday && (
           <div
-            className="absolute h-[7px] w-8 rounded-full bg-white/9 pointer-events-none"
+            className="absolute h-[7px] w-8 rounded-full bg-slate-700 pointer-events-none"
             style={{
               left: underlineLeft,
               bottom: UNDERLINE_BOTTOM,
@@ -322,7 +319,7 @@ export default function GroupUserCalendar({
     <div className="w-full mt-[10px]">
       <div
         ref={scrollRef}
-        className="w-full h-28 bg-surface rounded-lg flex items-center overflow-x-auto overflow-y-hidden px-3 minimal-scrollbar"
+        className="w-full h-28 rounded-lg bg-slate-900/70 flex items-center overflow-x-auto overflow-y-hidden px-3 minimal-scrollbar"
       >
         <div className="flex items-center gap-2 min-w-max">
           {/* 7 días previos (sin background/pill) */}

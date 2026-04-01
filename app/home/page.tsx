@@ -309,7 +309,15 @@ export default async function HomePage() {
               </div>
             </a>
 
-            <LogoutButton />
+            <div className="flex items-center gap-2">
+              <a
+                href="/profile"
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700"
+              >
+                Mi perfil
+              </a>
+              <LogoutButton />
+            </div>
           </div>
 
           <div className="mb-5">

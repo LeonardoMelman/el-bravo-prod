@@ -2,34 +2,92 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 
+const ALLOWED_ACTIVITY_TYPES = ["gym", "run", "sport", "mobility", "other"] as const;
+
+function parseDateOnly(value: string) {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+}
+
+function normalizeAllowedActivityTypes(input: unknown) {
+  if (!Array.isArray(input)) return [];
+
+  return Array.from(
+    new Set(
+      input.filter(
+        (value): value is (typeof ALLOWED_ACTIVITY_TYPES)[number] =>
+          typeof value === "string" &&
+          ALLOWED_ACTIVITY_TYPES.includes(value as (typeof ALLOWED_ACTIVITY_TYPES)[number])
+      )
+    )
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await req.json().catch(() => ({}));
-    const { groupId, name, startDate, endDate, minPerWeek, description } = body ?? {};
+
+    const {
+      groupId,
+      name,
+      startDate,
+      endDate,
+      minPerWeek,
+      description,
+      allowedActivityTypes,
+    } = body ?? {};
 
     if (!groupId || typeof groupId !== "string") {
       return NextResponse.json({ error: "Missing groupId" }, { status: 400 });
     }
-    if (!name || !startDate || !endDate) {
+
+    if (!name || typeof name !== "string" || !startDate || !endDate) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // ✅ membership del grupo correcto + admin
+    const normalizedWeeklyGoal = Number(minPerWeek);
+
+    if (
+      !Number.isInteger(normalizedWeeklyGoal) ||
+      normalizedWeeklyGoal < 1 ||
+      normalizedWeeklyGoal > 7
+    ) {
+      return NextResponse.json({ error: "Invalid weekly goal" }, { status: 400 });
+    }
+
+    const normalizedAllowedActivityTypes =
+      normalizeAllowedActivityTypes(allowedActivityTypes);
+
+    if (normalizedAllowedActivityTypes.length === 0) {
+      return NextResponse.json(
+        { error: "Select at least one allowed activity type" },
+        { status: 400 }
+      );
+    }
+
     const membership = await prisma.groupMember.findFirst({
-      where: { userId: user.id, groupId, leftAt: null },
-      select: { role: true },
+      where: {
+        userId: user.id,
+        groupId,
+        leftAt: null,
+      },
+      select: {
+        role: true,
+      },
     });
 
-    if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
-    if (membership.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!membership) {
+      return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    }
 
-   function parseDateOnly(value: string) {
-      const [y, m, d] = value.split("-").map(Number);
-      // Date-only estable: lo guardamos al MEDIODÍA UTC para evitar saltos por TZ
-      return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    if (membership.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const start = parseDateOnly(startDate);
@@ -44,20 +102,22 @@ export async function POST(req: Request) {
         data: {
           groupId,
           name: name.trim(),
-          description: description ?? null,
+          description:
+            typeof description === "string" && description.trim().length > 0
+              ? description.trim()
+              : null,
           startDate: start,
           endDate: end,
+          weeklyGoal: normalizedWeeklyGoal,
+          allowedActivityTypes: normalizedAllowedActivityTypes,
         },
       });
 
-      // ✅ Auto-unir al creador a la temporada
       await tx.seasonMember.createMany({
         data: [
           {
             seasonId: created.id,
             userId: user.id,
-            // NO agrego joinedAt/role acá porque tu schema puede tener defaults.
-            // Si tu schema los exige sin default, te paso el ajuste exacto.
           },
         ],
         skipDuplicates: true,
@@ -65,7 +125,6 @@ export async function POST(req: Request) {
 
       return created;
     });
-
 
     return NextResponse.json({ id: season.id }, { status: 201 });
   } catch (err) {

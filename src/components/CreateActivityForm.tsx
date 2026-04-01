@@ -183,7 +183,7 @@ export default function CreateActivityForm() {
     }
 
     if (exercises.length === 0) {
-      setError("Tenés que agregar al menos un ejercicio para guardar la actividad.");
+      setError("Carga por lo menos un ejercicio para guardar tu actividad.");
       return;
     }
 
@@ -489,7 +489,7 @@ export default function CreateActivityForm() {
 
           {exercises.length === 0 ? (
             <p className="mt-3 text-sm text-amber-300">
-              Tenés que agregar al menos un ejercicio para guardar la actividad.
+              Carga por lo menos un ejercicio para guardar tu actividad.
             </p>
           ) : null}
         </div>

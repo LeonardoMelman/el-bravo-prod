@@ -1,72 +1,153 @@
-// app/group/[id]/page.tsx
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 import GroupPageClient from "./GroupPageClient";
 
-function getWeekKey(d: Date) {
-  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNr = (target.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - dayNr + 3);
-  const firstThursday = target.valueOf();
-  target.setUTCMonth(0, 1);
-  if (target.getUTCDay() !== 4) {
-    target.setUTCMonth(
-      0,
-      1 + ((4 - target.getUTCDay()) + 7) % 7
-    );
-  }
-  const week =
-    1 + Math.round(
-      (firstThursday - target.valueOf()) / (7 * 24 * 3600 * 1000)
-    );
-  return `${d.getUTCFullYear()}-W${week}`;
+type ActivityMuscleItem = {
+  name: string;
+  percentage: number;
+};
+
+function roundTo(value: number, decimals = 1) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
-function computeStreaks(
-  activities: any[],
-  weeksLookback = 16,
-  goldenThresh = 2
+function calculateActivityMuscleShare(
+  exercises: Array<{
+    sets: number;
+    reps: number;
+    weightKg?: number | null;
+    exercise: {
+      muscles: Array<{
+        percentage: number;
+        muscle: {
+          name: string;
+        };
+      }>;
+    };
+  }>
+): ActivityMuscleItem[] {
+  const muscleLoadMap = new Map<string, number>();
+
+  for (const entry of exercises) {
+    const sets = Number(entry.sets) || 0;
+    const reps = Number(entry.reps) || 0;
+    const weightKg = Number(entry.weightKg) || 0;
+
+    const baseLoad = weightKg > 0 ? sets * reps * weightKg : sets * reps;
+    if (baseLoad <= 0) continue;
+
+    const muscles = entry.exercise?.muscles ?? [];
+    if (muscles.length === 0) continue;
+
+    const totalPct = muscles.reduce((sum, item) => sum + item.percentage, 0);
+    if (totalPct <= 0) continue;
+
+    for (const muscleEntry of muscles) {
+      const normalized = muscleEntry.percentage / totalPct;
+      const contributed = baseLoad * normalized;
+      const key = muscleEntry.muscle.name;
+
+      muscleLoadMap.set(key, (muscleLoadMap.get(key) ?? 0) + contributed);
+    }
+  }
+
+  const totalLoad = Array.from(muscleLoadMap.values()).reduce((a, b) => a + b, 0);
+  if (totalLoad <= 0) return [];
+
+  return Array.from(muscleLoadMap.entries())
+    .map(([name, load]) => ({
+      name,
+      percentage: roundTo((load / totalLoad) * 100, 1),
+    }))
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 4);
+}
+
+function getWeekStart(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function getWeekKey(date: Date) {
+  const weekStart = getWeekStart(date);
+  const year = weekStart.getFullYear();
+  const month = String(weekStart.getMonth() + 1).padStart(2, "0");
+  const day = String(weekStart.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getPreviousWeek(date: Date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - 7);
+  return d;
+}
+
+function getCurrentConsecutiveWeekStreak(
+  weekCounts: Map<string, number>,
+  predicate: (count: number) => boolean
 ) {
   const now = new Date();
-  const currentWeekKey = getWeekKey(now); // 🔹 semana actual (ISO / lunes-based)
+  const currentWeekStart = getWeekStart(now);
+  const currentWeekCount = weekCounts.get(getWeekKey(currentWeekStart)) ?? 0;
 
-  // Generamos las keys de las últimas N semanas para calcular las rachas
-  const weekKeys: string[] = [];
-  for (let i = 0; i < weeksLookback; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i * 7);
-    weekKeys.push(getWeekKey(d));
+  let cursor = predicate(currentWeekCount)
+    ? currentWeekStart
+    : getPreviousWeek(currentWeekStart);
+
+  let streak = 0;
+
+  while (true) {
+    const key = getWeekKey(cursor);
+    const count = weekCounts.get(key) ?? 0;
+
+    if (!predicate(count)) break;
+
+    streak += 1;
+    cursor = getPreviousWeek(cursor);
   }
 
-  // Contamos cuántos entrenos hay por semana
-  const counts: Record<string, number> = {};
-  activities.forEach((a) => {
-    const k = getWeekKey(new Date(a.startedAt));
-    counts[k] = (counts[k] || 0) + 1;
-  });
+  return streak;
+}
 
-  let common = 0;
-  let golden = 0;
+function normalizeAllowedActivityTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
 
-  // 🔹 Racha común: semanas seguidas con >= 1 entreno
-  for (const k of weekKeys) {
-    const c = counts[k] || 0;
-    if (c >= 1) common += 1;
-    else break;
+function computeSeasonMemberStats(
+  activities: Array<{ startedAt: Date }>,
+  weeklyGoal: number
+) {
+  const weekCounts = new Map<string, number>();
+
+  for (const activity of activities) {
+    const weekKey = getWeekKey(activity.startedAt);
+    weekCounts.set(weekKey, (weekCounts.get(weekKey) ?? 0) + 1);
   }
 
-  // 🔹 Racha golden: semanas seguidas con >= goldenThresh entrenos
-  for (const k of weekKeys) {
-    const c = counts[k] || 0;
-    if (c >= goldenThresh) golden += 1;
-    else break;
-  }
+  const currentWeekCount = weekCounts.get(getWeekKey(new Date())) ?? 0;
 
-  // 🔹 Entrenamientos en la semana ACTUAL
-  const currentWeekCount = counts[currentWeekKey] || 0;
+  const activeWeeks = getCurrentConsecutiveWeekStreak(
+    weekCounts,
+    (count) => count >= 1
+  );
 
-  return { commonStreak: common, goldenStreak: golden, currentWeekCount };
+  const perfectWeeks = getCurrentConsecutiveWeekStreak(
+    weekCounts,
+    (count) => count >= weeklyGoal
+  );
+
+  return {
+    currentWeekCount,
+    activeWeeks,
+    perfectWeeks,
+  };
 }
 
 export default async function GroupByIdPage({
@@ -78,16 +159,20 @@ export default async function GroupByIdPage({
   if (!user) redirect("/login");
 
   const { id: groupId } = await params;
+  if (!groupId) redirect("/home");
 
-  if (!groupId) redirect("/dashboard");
-
-  // Validar que el user sea miembro activo de ESTE grupo
   const membership = await prisma.groupMember.findFirst({
-    where: { userId: user.id, groupId, leftAt: null },
-    include: { group: true },
+    where: {
+      userId: user.id,
+      groupId,
+      leftAt: null,
+    },
+    include: {
+      group: true,
+    },
   });
 
-  if (!membership?.group) redirect("/dashboard");
+  if (!membership?.group) redirect("/home");
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -129,78 +214,214 @@ export default async function GroupByIdPage({
     },
   });
 
-  if (!group) redirect("/dashboard");
+  if (!group) redirect("/home");
 
   const isAdmin = membership.role === "admin";
+  const now = new Date();
 
-  // Actividad reciente del grupo
-  const memberIds = group.members.map((m) => m.userId);
-  const activities = await prisma.activity.findMany({
-    where: { userId: { in: memberIds } },
-    orderBy: { startedAt: "desc" },
-    take: 50,
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          photoUrl: true,
+  const activeSeason =
+    group.seasons.find(
+      (season) =>
+        new Date(season.startDate) <= now && new Date(season.endDate) >= now
+    ) ?? null;
+
+  const upcomingSeason =
+    group.seasons.find((season) => new Date(season.startDate) > now) ?? null;
+
+  const pastSeasons = group.seasons.filter(
+    (season) => new Date(season.endDate) < now
+  );
+
+  const memberIds = group.members.map((member) => member.userId);
+
+const activities = await prisma.activity.findMany({
+  where: {
+    userId: { in: memberIds },
+    isDeleted: false,
+  },
+  orderBy: { startedAt: "desc" },
+  take: 100,
+  include: {
+    user: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        photoUrl: true,
+      },
+    },
+    media: {
+      select: {
+        id: true,
+        url: true,
+      },
+      take: 1,
+    },
+    exercises: {
+      select: {
+        id: true,
+        sets: true,
+        reps: true,
+        weightKg: true,
+        exercise: {
+          select: {
+            id: true,
+            name: true,
+            muscles: {
+              select: {
+                percentage: true,
+                muscle: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
-  });
+  },
+});
 
-  const membersWithStats = await Promise.all(
-    group.members.map(async (m) => {
-      const acts = await prisma.activity.findMany({
-        where: { userId: m.userId },
-        orderBy: { startedAt: "desc" },
-        take: 200,
+  const activeSeasonAllowedTypes = activeSeason
+    ? normalizeAllowedActivityTypes(activeSeason.allowedActivityTypes)
+    : [];
+
+  const seasonScopedActivities = activeSeason
+    ? activities.filter((activity) => {
+        const startedAt = new Date(activity.startedAt);
+        const matchesDate =
+          startedAt >= new Date(activeSeason.startDate) &&
+          startedAt <= new Date(activeSeason.endDate);
+
+        const matchesType =
+          activeSeasonAllowedTypes.length === 0 ||
+          activeSeasonAllowedTypes.includes(activity.type);
+
+        return matchesDate && matchesType;
+      })
+    : [];
+
+  const earnedAwards = activeSeason
+    ? await prisma.awardEarned.findMany({
+        where: {
+          seasonId: activeSeason.id,
+          userId: { in: memberIds },
+        },
+        orderBy: {
+          earnedAt: "desc",
+        },
+        include: {
+          award: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+              category: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const awardsByUser = new Map<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      level: number | null;
+      category: string | null;
+    }>
+  >();
+
+  for (const earned of earnedAwards) {
+    const current = awardsByUser.get(earned.userId) ?? [];
+
+    if (!current.some((item) => item.id === earned.award.id)) {
+      current.push({
+        id: earned.award.id,
+        name: earned.award.name,
+        level: earned.award.level,
+        category: earned.award.category,
       });
-      const s = computeStreaks(
-        acts.map((a) => ({ startedAt: a.startedAt })),
-        16,
-        2
+    }
+
+    awardsByUser.set(earned.userId, current);
+  }
+
+  const membersWithStats = group.members
+    .map((member) => {
+      const memberActivities = seasonScopedActivities.filter(
+        (activity) => activity.userId === member.userId
       );
+
+      const stats = computeSeasonMemberStats(
+        memberActivities.map((activity) => ({ startedAt: activity.startedAt })),
+        activeSeason?.weeklyGoal ?? 2
+      );
+
+      const badges = (awardsByUser.get(member.userId) ?? []).slice(0, 3);
+
       return {
-        id: m.user.id,
-        name: m.user.name,
-        email: m.user.email,
-        photoUrl: m.user.photoUrl,
-        ...s,
+        id: member.user.id,
+        userId: member.userId,
+        name: member.user.name,
+        email: member.user.email,
+        photoUrl: member.user.photoUrl,
+        role: member.role,
+        currentWeekCount: stats.currentWeekCount,
+        activeWeeks: stats.activeWeeks,
+        perfectWeeks: stats.perfectWeeks,
+        badges,
       };
     })
-  );
+    .sort((a, b) => {
+      return (
+        b.perfectWeeks - a.perfectWeeks ||
+        b.activeWeeks - a.activeWeeks ||
+        b.currentWeekCount - a.currentWeekCount
+      );
+    });
 
-  membersWithStats.sort(
-    (a, b) =>
-      b.goldenStreak - a.goldenStreak ||
-      b.commonStreak - a.commonStreak
-  );
+  const seasons = group.seasons.map((season) => {
+    const joined = season.members.some((member) => member.userId === user.id);
+    const allowedTypes = normalizeAllowedActivityTypes(season.allowedActivityTypes);
 
-  const actData = activities.map((a) => ({
-    id: a.id,
-    type: a.type,
-    notes: a.notes,
-    startedAt: a.startedAt,
-    user: a.user,
-  }));
+    return {
+      id: season.id,
+      name: season.name,
+      description: season.description,
+      startDate: season.startDate,
+      endDate: season.endDate,
+      weeklyGoal: season.weeklyGoal,
+      allowedActivityTypes: allowedTypes,
+      members: season.members.map((member) => ({
+        id: member.user.id,
+        userId: member.userId,
+        name: member.user.name,
+        email: member.user.email,
+        photoUrl: member.user.photoUrl,
+      })),
+      joined,
+      isActive:
+        new Date(season.startDate) <= now && new Date(season.endDate) >= now,
+      isUpcoming: new Date(season.startDate) > now,
+      isPast: new Date(season.endDate) < now,
+    };
+  });
 
-  const now = new Date();
-  const activeSeason =
-    group.seasons.find(
-      (s) =>
-        new Date(s.startDate) <= now &&
-        new Date(s.endDate) >= now
-    ) ?? null;
-  const upcomingSeason =
-    group.seasons.find(
-      (s) => new Date(s.startDate) > now
-    ) ?? null;
-  const pastSeasons = group.seasons.filter(
-    (s) => new Date(s.endDate) < now
-  );
+  const actData = seasonScopedActivities.map((activity) => ({
+  id: activity.id,
+  type: activity.type,
+  notes: activity.notes,
+  startedAt: activity.startedAt,
+  endedAt: activity.endedAt,
+  durationMinutes: activity.durationMinutes,
+  mediaUrl: activity.media?.[0]?.url ?? null,
+  user: activity.user,
+  muscles: calculateActivityMuscleShare(activity.exercises),
+}));
 
   return (
     <GroupPageClient
@@ -211,6 +432,8 @@ export default async function GroupByIdPage({
       activeSeason={activeSeason}
       upcomingSeason={upcomingSeason}
       pastSeasons={pastSeasons}
+      seasons={seasons}
+      currentUserId={user.id}
     />
   );
 }
