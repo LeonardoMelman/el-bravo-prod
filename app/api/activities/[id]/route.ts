@@ -53,7 +53,10 @@ export async function DELETE(
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const affectedSeasons = activity.activitySeasons.map((item) => ({
+    const affectedSeasons = activity.activitySeasons.map((item: {
+      seasonId: string;
+      season: { weeklyGoal: number };
+    }) => ({
       seasonId: item.seasonId,
       weeklyGoal: item.season.weeklyGoal,
     }));
