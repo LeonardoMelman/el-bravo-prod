@@ -30,26 +30,129 @@ type UserSeasonStanding = {
   nextBelow: SeasonLeaderboardEntry | null;
 } | null;
 
+type GroupMemberUser = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  photoUrl: string | null;
+};
+
+type GroupMemberRow = {
+  id: string;
+  userId: string;
+  role: string;
+  user: GroupMemberUser;
+};
+
+type SeasonMemberRow = {
+  userId: string;
+  user: GroupMemberUser;
+};
+
+type ActivityCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
+type AllowedActivityTypeLinkRow = {
+  activityCategoryId: string;
+  activityCategory: ActivityCategoryRow;
+};
+
+type GroupSeasonRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  endedAt: Date | null;
+  weeklyGoal: number;
+  members: SeasonMemberRow[];
+  allowedActivityTypeLinks: AllowedActivityTypeLinkRow[];
+};
+
+type GroupWithRelations = {
+  id: string;
+  name: string;
+  inviteCode: string | null;
+  members: GroupMemberRow[];
+  seasons: GroupSeasonRow[];
+};
+
+type AwardByUserItem = {
+  id: string;
+  name: string;
+  level: number | null;
+  category: string | null;
+};
+
+type SeasonCard = {
+  id: string;
+  name: string;
+  description: string | null;
+  startDate: Date;
+  endDate: Date;
+  weeklyGoal: number;
+  allowedActivityTypes: Array<{
+    id: string;
+    slug: string;
+    name: string;
+  }>;
+  members: Array<{
+    id: string;
+    userId: string;
+    name: string | null;
+    email: string | null;
+    photoUrl: string | null;
+  }>;
+  joined: boolean;
+  isActive: boolean;
+  isUpcoming: boolean;
+  isPast: boolean;
+};
+
+type ActivityExerciseForShare = {
+  sets: number;
+  reps: number | null;
+  weightKg?: number | null;
+  exercise: {
+    measureType?: "reps" | "duration";
+    muscles: Array<{
+      percentage: number;
+      muscle: {
+        name: string;
+      };
+    }>;
+  };
+};
+
+type ActivityRow = {
+  id: string;
+  userId: string;
+  type: string;
+  notes: string | null;
+  startedAt: Date;
+  endedAt: Date;
+  durationMinutes: number | null;
+  activityCategoryId: string | null;
+  activityCategory: ActivityCategoryRow | null;
+  user: GroupMemberUser;
+  media: Array<{
+    id: string;
+    url: string;
+  }>;
+  exercises: ActivityExerciseForShare[];
+};
+
 function roundTo(value: number, decimals = 1) {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
 }
 
 function calculateActivityMuscleShare(
-  exercises: Array<{
-    sets: number;
-    reps: number | null;
-    weightKg?: number | null;
-    exercise: {
-      measureType?: "reps" | "duration";
-      muscles: Array<{
-        percentage: number;
-        muscle: {
-          name: string;
-        };
-      }>;
-    };
-  }>
+  exercises: ActivityExerciseForShare[]
 ): ActivityMuscleItem[] {
   const muscleLoadMap = new Map<string, number>();
 
@@ -213,8 +316,8 @@ function buildSeasonLeaderboardWithZeroPointMembers(
     .sort((a, b) => {
       return (
         b.points - a.points ||
-        b.perfectWeeks - a.perfectWeeks ||
-        b.activeWeeks - a.activeWeeks ||
+        (b.perfectWeeks ?? 0) - (a.perfectWeeks ?? 0) ||
+        (b.activeWeeks ?? 0) - (a.activeWeeks ?? 0) ||
         (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "")
       );
     })
@@ -270,7 +373,7 @@ export default async function GroupByIdPage({
 
   if (!membership?.group) redirect("/home");
 
-  const group = await prisma.group.findUnique({
+  const groupRaw = await prisma.group.findUnique({
     where: { id: groupId },
     include: {
       members: {
@@ -321,13 +424,15 @@ export default async function GroupByIdPage({
     },
   });
 
+  const group = groupRaw as GroupWithRelations | null;
+
   if (!group) redirect("/home");
 
   const isAdmin = membership.role === "admin";
   const now = new Date();
 
   const seasonsToAutoFinalize = group.seasons.filter(
-    (season) =>
+    (season: GroupSeasonRow) =>
       season.isActive &&
       !season.endedAt &&
       new Date(season.endDate).getTime() <= now.getTime()
@@ -339,7 +444,7 @@ export default async function GroupByIdPage({
     }
   }
 
-  const freshGroup =
+  const freshGroupRaw =
     seasonsToAutoFinalize.length > 0
       ? await prisma.group.findUnique({
           where: { id: groupId },
@@ -393,11 +498,13 @@ export default async function GroupByIdPage({
         })
       : group;
 
+  const freshGroup = freshGroupRaw as GroupWithRelations | null;
+
   if (!freshGroup) redirect("/home");
 
   const activeSeason =
     freshGroup.seasons.find(
-      (season) =>
+      (season: GroupSeasonRow) =>
         season.isActive &&
         !season.endedAt &&
         new Date(season.startDate).getTime() <= now.getTime() &&
@@ -405,7 +512,7 @@ export default async function GroupByIdPage({
     ) ?? null;
 
   const userJoinedActiveSeason = activeSeason
-    ? activeSeason.members.some((member) => member.userId === user.id)
+    ? activeSeason.members.some((member: SeasonMemberRow) => member.userId === user.id)
     : false;
 
   const rawSeasonLeaderboard =
@@ -425,19 +532,19 @@ export default async function GroupByIdPage({
 
   const upcomingSeason =
     freshGroup.seasons.find(
-      (season) => new Date(season.startDate).getTime() > now.getTime()
+      (season: GroupSeasonRow) => new Date(season.startDate).getTime() > now.getTime()
     ) ?? null;
 
   const pastSeasons = freshGroup.seasons.filter(
-    (season) =>
+    (season: GroupSeasonRow) =>
       !season.isActive ||
       !!season.endedAt ||
       new Date(season.endDate).getTime() < now.getTime()
   );
 
-  const memberIds = freshGroup.members.map((member) => member.userId);
+  const memberIds = freshGroup.members.map((member: GroupMemberRow) => member.userId);
 
-  const activities = await prisma.activity.findMany({
+  const activitiesRaw = await prisma.activity.findMany({
     where: {
       userId: { in: memberIds },
       isDeleted: false,
@@ -495,20 +602,23 @@ export default async function GroupByIdPage({
     },
   });
 
+  const activities = activitiesRaw as ActivityRow[];
+
   const activeSeasonAllowedTypes = activeSeason
     ? getAllowedActivityCategoryIds(activeSeason.allowedActivityTypeLinks)
     : [];
 
   const seasonScopedActivities = activeSeason
-    ? activities.filter((activity) => {
+    ? activities.filter((activity: ActivityRow) => {
         const startedAt = new Date(activity.startedAt);
+
         const matchesDate =
           startedAt >= new Date(activeSeason.startDate) &&
           startedAt <= new Date(activeSeason.endDate);
 
         const matchesType =
           activeSeasonAllowedTypes.length === 0 ||
-          (activity.activityCategoryId &&
+          (!!activity.activityCategoryId &&
             activeSeasonAllowedTypes.includes(activity.activityCategoryId));
 
         return matchesDate && matchesType;
@@ -537,15 +647,7 @@ export default async function GroupByIdPage({
       })
     : [];
 
-  const awardsByUser = new Map<
-    string,
-    Array<{
-      id: string;
-      name: string;
-      level: number | null;
-      category: string | null;
-    }>
-  >();
+  const awardsByUser = new Map<string, AwardByUserItem[]>();
 
   for (const earned of earnedAwards) {
     const current = awardsByUser.get(earned.userId) ?? [];
@@ -563,13 +665,13 @@ export default async function GroupByIdPage({
   }
 
   const membersWithStats = freshGroup.members
-    .map((member) => {
+    .map((member: GroupMemberRow) => {
       const memberActivities = seasonScopedActivities.filter(
-        (activity) => activity.userId === member.userId
+        (activity: ActivityRow) => activity.userId === member.userId
       );
 
       const stats = computeSeasonMemberStats(
-        memberActivities.map((activity) => ({ startedAt: activity.startedAt })),
+        memberActivities.map((activity: ActivityRow) => ({ startedAt: activity.startedAt })),
         activeSeason?.weeklyGoal ?? 2
       );
 
@@ -596,8 +698,8 @@ export default async function GroupByIdPage({
       );
     });
 
-  const seasons = freshGroup.seasons.map((season) => {
-    const joined = season.members.some((member) => member.userId === user.id);
+  const seasons: SeasonCard[] = freshGroup.seasons.map((season: GroupSeasonRow) => {
+    const joined = season.members.some((member: SeasonMemberRow) => member.userId === user.id);
 
     return {
       id: season.id,
@@ -606,12 +708,14 @@ export default async function GroupByIdPage({
       startDate: season.startDate,
       endDate: season.endDate,
       weeklyGoal: season.weeklyGoal,
-      allowedActivityTypes: season.allowedActivityTypeLinks.map((item) => ({
-        id: item.activityCategory.id,
-        slug: item.activityCategory.slug,
-        name: item.activityCategory.name,
-      })),
-      members: season.members.map((member) => ({
+      allowedActivityTypes: season.allowedActivityTypeLinks.map(
+        (item: AllowedActivityTypeLinkRow) => ({
+          id: item.activityCategory.id,
+          slug: item.activityCategory.slug,
+          name: item.activityCategory.name,
+        })
+      ),
+      members: season.members.map((member: SeasonMemberRow) => ({
         id: member.user.id,
         userId: member.userId,
         name: member.user.name,
@@ -626,7 +730,7 @@ export default async function GroupByIdPage({
     };
   });
 
-  const actData = seasonScopedActivities.map((activity) => ({
+  const actData = seasonScopedActivities.map((activity: ActivityRow) => ({
     id: activity.id,
     type: activity.type,
     activityCategory: activity.activityCategory,
