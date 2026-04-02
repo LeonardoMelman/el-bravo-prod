@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 import { recalculateSeasonWeekProgress } from "@/src/lib/scoring/recalculateSeasonWeekProgress";
@@ -53,15 +54,17 @@ export async function DELETE(
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
-    const affectedSeasons = activity.activitySeasons.map((item: {
-      seasonId: string;
-      season: { weeklyGoal: number };
-    }) => ({
-      seasonId: item.seasonId,
-      weeklyGoal: item.season.weeklyGoal,
-    }));
+    const affectedSeasons = activity.activitySeasons.map(
+      (item: {
+        seasonId: string;
+        season: { weeklyGoal: number };
+      }) => ({
+        seasonId: item.seasonId,
+        weeklyGoal: item.season.weeklyGoal,
+      })
+    );
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.scoreEvent.deleteMany({
         where: {
           activityId: id,
