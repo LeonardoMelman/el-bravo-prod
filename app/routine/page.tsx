@@ -176,7 +176,7 @@ export default function RoutinesPage() {
                         <p className="mt-2 text-sm text-slate-400">
                           {distribution.ignoredExercises.length > 0
                             ? "Algunos ejercicios no tienen mapeo muscular completo."
-                            : "Distribución muscular calculada correctamente."}
+                            : "Distribución por grupo muscular."}
                         </p>
                       </div>
 

@@ -30,22 +30,41 @@ export async function POST(req: Request) {
 
     // Hard delete: borra TODO lo relacionado al grupo
     await prisma.$transaction(async (tx) => {
+    const seasons = await tx.season.findMany({
+      where: { groupId },
+      select: { id: true },
+    });
+
+    const seasonIds = seasons.map((season) => season.id);
+
+    if (seasonIds.length > 0) {
+      await tx.awardEarned.deleteMany({
+        where: {
+          seasonId: { in: seasonIds },
+        },
+      });
+
       await tx.seasonMember.deleteMany({
-        where: { season: { groupId } },
+        where: {
+          seasonId: { in: seasonIds },
+        },
       });
 
       await tx.season.deleteMany({
-        where: { groupId },
+        where: {
+          id: { in: seasonIds },
+        },
       });
+    }
 
-      await tx.groupMember.deleteMany({
-        where: { groupId },
-      });
-
-      await tx.group.delete({
-        where: { id: groupId },
-      });
+    await tx.groupMember.deleteMany({
+      where: { groupId },
     });
+
+    await tx.group.delete({
+      where: { id: groupId },
+    });
+  });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: any) {

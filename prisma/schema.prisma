@@ -37,6 +37,8 @@ enum ScoreEventType {
   award_bonus
   manual_adjustment
   penalty
+  final_longest_perfect_streak_bonus
+  final_longest_session_bonus
 }
 
 enum AwardScope {

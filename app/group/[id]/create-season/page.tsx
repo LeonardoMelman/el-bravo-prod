@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
 type ActivityTypeOption = {
@@ -27,6 +27,15 @@ function getActivityTypeLabel(type: string) {
   return ACTIVITY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
 }
 
+function rangesOverlap(
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string
+) {
+  return startA <= endB && endA >= startB;
+}
+
 export default function CreateSeasonPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -43,8 +52,47 @@ export default function CreateSeasonPage() {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingSeasons, setExistingSeasons] = useState<
+  Array<{
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    isActive?: boolean;
+  }>
+>([]);
 
   const totalSteps = 5;
+
+  useEffect(() => {
+  let alive = true;
+
+  async function loadSeasons() {
+    if (!groupId) return;
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/seasons`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json().catch(() => []);
+      if (!alive) return;
+
+      setExistingSeasons(Array.isArray(data) ? data : []);
+    } catch {
+      // silencioso, la validación fuerte queda en backend
+    }
+  }
+
+  loadSeasons();
+
+  return () => {
+    alive = false;
+  };
+}, [groupId]);
 
   const stepTitles = [
     "Detalles",
@@ -84,6 +132,27 @@ export default function CreateSeasonPage() {
       if (startDate < todayStr) return "La fecha de inicio no puede ser en el pasado";
       if (endDate < todayStr) return "La fecha de fin no puede ser en el pasado";
       if (endDate < startDate) return "La fecha de fin no puede ser anterior a la de inicio";
+
+      const overlappingSeason = existingSeasons.find((season) =>
+        rangesOverlap(startDate, endDate, season.startDate.slice(0, 10), season.endDate.slice(0, 10))
+      );
+
+      if (overlappingSeason) {
+        return `Las fechas se superponen con la temporada "${overlappingSeason.name}"`;
+      }
+
+      const today = todayStr;
+      const newSeasonWouldBeActive = startDate <= today && endDate >= today;
+
+      const alreadyActiveSeason = existingSeasons.find((season) => {
+        const seasonStart = season.startDate.slice(0, 10);
+        const seasonEnd = season.endDate.slice(0, 10);
+        return seasonStart <= today && seasonEnd >= today;
+      });
+
+      if (newSeasonWouldBeActive && alreadyActiveSeason) {
+        return `Ya existe una temporada activa: "${alreadyActiveSeason.name}"`;
+      }
     }
 
     if (currentStep === 2) {

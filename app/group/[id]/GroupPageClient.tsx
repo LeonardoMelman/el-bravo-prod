@@ -2,13 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Navbar from "@/src/components/Navbar";
 import UserActiveStats from "@/src/components/UserActiveStats";
 import GroupUserCalendar from "@/src/components/GroupUserCalendar";
 import InviteGroupButton from "@/src/components/InviteGroupButton";
 import GroupInviteCodePanel from "@/src/components/GroupInviteCodePanel";
 import GroupSettingsPopup from "@/src/components/GroupSettingsPopup";
-import GroupSeasonActivities from "@/src/components/GroupSeasonActivities";
 
 type MemberBadge = {
   id: string;
@@ -51,6 +49,26 @@ type SeasonCard = {
   }>;
 };
 
+type SeasonLeaderboardEntry = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  photoUrl: string | null;
+  points: number;
+  rank: number;
+  activeWeeks: number;
+  perfectWeeks: number;
+};
+
+type UserSeasonStanding = {
+  rank: number;
+  totalPoints: number;
+  totalParticipants: number;
+  pointsToNextAbove: number | null;
+  nextAbove: SeasonLeaderboardEntry | null;
+  nextBelow: SeasonLeaderboardEntry | null;
+} | null;
+
 type GroupPageClientProps = {
   group: any;
   isAdmin: boolean;
@@ -61,6 +79,8 @@ type GroupPageClientProps = {
   pastSeasons: any[];
   seasons: SeasonCard[];
   currentUserId: string;
+  seasonLeaderboard: SeasonLeaderboardEntry[];
+  userSeasonStanding: UserSeasonStanding;
 };
 
 type MeResponse = {
@@ -106,7 +126,12 @@ export default function GroupPageClient({
   activities,
   membersWithStats,
   activeSeason,
+  upcomingSeason,
+  pastSeasons,
   seasons,
+  currentUserId,
+  seasonLeaderboard,
+  userSeasonStanding,
 }: GroupPageClientProps) {
   const router = useRouter();
 
@@ -214,11 +239,36 @@ export default function GroupPageClient({
     }
   }
 
+  async function finalizeSeason(seasonId: string) {
+  const confirmed = window.confirm("¿Finalizar esta temporada?");
+  if (!confirmed) return;
+
+  setLoadingAction(`finalize-${seasonId}`);
+
+  try {
+    const res = await fetch("/api/seasons/finalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId: group.id, seasonId }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(data?.error || "No se pudo finalizar la temporada.");
+      return;
+    }
+
+    router.refresh();
+  } catch {
+    alert("Error de red al finalizar la temporada.");
+  } finally {
+    setLoadingAction(null);
+  }
+}
+
   return (
     <>
-      <header>
-      </header>
-
       <main className="min-h-screen bg-[#08142d] p-6 text-white">
         <div className="mx-auto max-w-7xl space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -353,161 +403,204 @@ export default function GroupPageClient({
                   )}
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-  <section className="rounded-2xl bg-slate-900/70 p-4">
-    <div className="mb-4 text-lg font-semibold text-white">
-      Actividades recientes
-    </div>
-
-    <div className="space-y-3">
-      {activities.length === 0 ? (
-        <div className="rounded-xl bg-slate-800 px-4 py-4 text-sm text-slate-400">
-          No hay actividades en la temporada activa.
-        </div>
-      ) : (
-        activities.slice(0, 6).map((activity) => (
-          <article
-            key={activity.id}
-            className="rounded-2xl border border-slate-700 bg-slate-800/80 p-3"
-          >
-            <div className="flex items-start gap-3">
-              <div className="h-20 w-20 overflow-hidden rounded-xl bg-slate-700">
-                {activity.mediaUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={activity.mediaUrl}
-                    alt={activity.user?.name ?? "Actividad"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-300">
-                    SIN FOTO
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-white">
-                      {activity.user?.name ?? activity.user?.email ?? "Usuario"}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {new Date(activity.startedAt).toLocaleDateString("es-AR")} ·{" "}
-                      {getActivityTypeLabel(activity.type)}
-                    </div>
-                  </div>
-
-                  <div className="text-right text-xs text-slate-400">
-                    {activity.durationMinutes ?? 0} min
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {activity.muscles && activity.muscles.length > 0 ? (
-                    activity.muscles.map((muscle: any) => (
-                      <div key={muscle.name}>
-                        <div className="mb-1 flex items-center justify-between text-xs">
-                          <span className="font-medium text-white">{muscle.name}</span>
-                          <span className="text-slate-300">{muscle.percentage}%</span>
-                        </div>
-
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-600">
-                          <div
-                            className="h-full rounded-full bg-lime-500"
-                            style={{ width: `${Math.min(muscle.percentage, 100)}%` }}
-                          />
-                        </div>
+                    <section className="rounded-2xl bg-slate-900/70 p-4">
+                      <div className="mb-4 text-lg font-semibold text-white">
+                        Actividades recientes
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-xs text-slate-500">
-                      No hay distribución muscular calculable.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </article>
-        ))
-      )}
-    </div>
-  </section>
 
-  <section className="rounded-2xl bg-slate-900/70 p-5">
-        <div className="mb-4 text-lg font-semibold text-white">Miembros</div>
+                      <div className="scrollbar-elbravo max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                        {activities.length === 0 ? (
+                          <div className="rounded-xl bg-slate-800 px-4 py-4 text-sm text-slate-400">
+                            No hay actividades en la temporada activa.
+                          </div>
+                        ) : (
+                          activities.map((activity) => (
+                            <article
+                              key={activity.id}
+                              className="rounded-2xl border border-slate-700 bg-slate-800/80 p-3"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="h-20 w-20 overflow-hidden rounded-xl bg-slate-700">
+                                  {activity.mediaUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={activity.mediaUrl}
+                                      alt={activity.user?.name ?? "Actividad"}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-300">
+                                      SIN FOTO
+                                    </div>
+                                  )}
+                                </div>
 
-        <div className="space-y-3">
-          {membersWithStats.map((member) => (
-            <div
-              key={member.id}
-              className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-12 w-12 overflow-hidden rounded-xl bg-slate-700">
-                    {member.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={member.photoUrl}
-                        alt={member.name ?? member.email ?? "Miembro"}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center font-bold text-white">
-                        {getInitial(member.name ?? member.email)}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="font-semibold text-white">
+                                        {activity.user?.name ?? activity.user?.email ?? "Usuario"}
+                                      </div>
+                                      <div className="mt-1 text-xs text-slate-400">
+                                        {new Date(activity.startedAt).toLocaleDateString("es-AR")} ·{" "}
+                                        {getActivityTypeLabel(activity.type)}
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right text-xs text-slate-400">
+                                      {activity.durationMinutes ?? 0} min
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 space-y-2">
+                                    {activity.muscles && activity.muscles.length > 0 ? (
+                                      activity.muscles.map((muscle: any) => (
+                                        <div key={muscle.name}>
+                                          <div className="mb-1 flex items-center justify-between text-xs">
+                                            <span className="font-medium text-white">
+                                              {muscle.name}
+                                            </span>
+                                            <span className="text-slate-300">
+                                              {muscle.percentage}%
+                                            </span>
+                                          </div>
+
+                                          <div className="h-2 overflow-hidden rounded-full bg-slate-600">
+                                            <div
+                                              className="h-full rounded-full bg-lime-500"
+                                              style={{
+                                                width: `${Math.min(muscle.percentage, 100)}%`,
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-xs text-slate-500">
+                                        No hay distribución muscular calculable.
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </article>
+                          ))
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </section>
 
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold text-white">
-                      {member.name ?? member.email}
-                    </div>
+                    <div className="space-y-4">
+                      {userSeasonStanding ? (
+                        <section className="rounded-2xl bg-slate-900/70 p-4">
+                          <div className="text-sm font-medium text-slate-300">
+                            Tu posición actual
+                          </div>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-200">
-                        {member.currentWeekCount} esta semana
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                          <div className="mt-2 flex items-end justify-between gap-3">
+                            <div>
+                              <div className="text-3xl font-bold text-white">
+                                {userSeasonStanding.rank}°
+                              </div>
+                              <div className="text-sm text-slate-400">
+                                de {userSeasonStanding.totalParticipants}
+                              </div>
+                            </div>
 
-                <div className="flex items-center gap-2">
-                  {member.badges.length > 0
-                    ? member.badges.map((badge) => (
-                        <div
-                          key={badge.id}
-                          title={badge.name}
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border text-[10px] font-bold ${getBadgeLevelClass(
-                            badge.level
-                          )}`}
-                        >
-                          {badge.name.slice(0, 2).toUpperCase()}
+                            <div className="text-right">
+                              <div className="text-2xl font-semibold text-lime-400">
+                                {userSeasonStanding.totalPoints}
+                              </div>
+                              <div className="text-sm text-slate-400">puntos</div>
+                            </div>
+                          </div>
+
+                          {userSeasonStanding.pointsToNextAbove !== null ? (
+                            <div className="mt-3 text-sm text-lime-400">
+                              A {userSeasonStanding.pointsToNextAbove} puntos del puesto superior
+                            </div>
+                          ) : (
+                            <div className="mt-3 text-sm text-lime-400">
+                              Vas primero en la tabla
+                            </div>
+                          )}
+                        </section>
+                      ) : null}
+
+                      <section className="rounded-2xl bg-slate-900/70 p-5">
+                        <div className="mb-4 text-lg font-semibold text-white">Miembros</div>
+
+                        <div className="scrollbar-elbravo max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                          {membersWithStats.map((member) => (
+                            <div
+                              key={member.id}
+                              className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <div className="h-12 w-12 overflow-hidden rounded-xl bg-slate-700">
+                                    {member.photoUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={member.photoUrl}
+                                        alt={member.name ?? member.email ?? "Miembro"}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center font-bold text-white">
+                                        {getInitial(member.name ?? member.email)}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="truncate font-semibold text-white">
+                                      {member.name ?? member.email}
+                                    </div>
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      <span className="rounded-full bg-slate-700 px-2 py-1 text-xs text-slate-200">
+                                        {member.currentWeekCount} esta semana
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {member.badges.length > 0
+                                    ? member.badges.map((badge) => (
+                                        <div
+                                          key={badge.id}
+                                          title={badge.name}
+                                          className={`flex h-10 w-10 items-center justify-center rounded-full border text-[10px] font-bold ${getBadgeLevelClass(
+                                            badge.level
+                                          )}`}
+                                        >
+                                          {badge.name.slice(0, 2).toUpperCase()}
+                                        </div>
+                                      ))
+                                    : null}
+
+                                  <div
+                                    title="Racha activa"
+                                    className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-500 text-sm font-bold text-white"
+                                  >
+                                    {member.activeWeeks}
+                                  </div>
+
+                                  <div
+                                    title="Racha perfecta"
+                                    className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-600 text-sm font-bold text-white"
+                                  >
+                                    {member.perfectWeeks}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))
-                    : null}
-
-                  <div
-                    title="Racha activa"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-500 text-sm font-bold text-white"
-                  >
-                    {member.activeWeeks}
+                      </section>
+                    </div>
                   </div>
-
-                  <div
-                    title="Racha perfecta"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-lime-600 text-sm font-bold text-white"
-                  >
-                    {member.perfectWeeks}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
                 </>
               ) : (
                 <div className="rounded-2xl bg-slate-900/70 p-5 text-sm text-slate-400">
@@ -610,13 +703,6 @@ export default function GroupPageClient({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <a
-                          href={`/group/${group.id}/season/${season.id}`}
-                          className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
-                        >
-                          Ver detalle
-                        </a>
-
                         {!season.joined && !season.isPast ? (
                           <button
                             type="button"
@@ -630,6 +716,19 @@ export default function GroupPageClient({
 
                         {isAdmin ? (
                           <>
+                            {season.isActive ? (
+                              <button
+                                type="button"
+                                onClick={() => finalizeSeason(season.id)}
+                                disabled={loadingAction === `finalize-${season.id}`}
+                                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-medium text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:opacity-60"
+                              >
+                                {loadingAction === `finalize-${season.id}`
+                                  ? "Finalizando..."
+                                  : "Finalizar"}
+                              </button>
+                            ) : null}
+
                             <a
                               href={`/group/${group.id}/season/${season.id}/edit`}
                               className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
@@ -650,6 +749,7 @@ export default function GroupPageClient({
                           </>
                         ) : null}
                       </div>
+
                     </div>
                   </article>
                 ))}

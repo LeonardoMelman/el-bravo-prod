@@ -10,9 +10,12 @@ export default function Navbar({ userName, photoUrl }: NavbarProps) {
     <header className="w-full h-14 px-6 bg-[#3b4f6c]">
       <div className="mx-auto max-w-7xl h-full flex items-center justify-between">
         {/* Logo */}
-        <div className="text-white font-semibold text-lg">
+        <a
+          href="/home"
+          className="text-white font-semibold text-lg hover:opacity-90 transition"
+        >
           El Bravo
-        </div>
+        </a>
 
         {/* User info */}
         <div className="flex items-center gap-3">

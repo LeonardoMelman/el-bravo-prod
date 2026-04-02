@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 import GroupPageClient from "./GroupPageClient";
+import { getSeasonLeaderboard } from "@/src/lib/scoring/getSeasonLeaderboard";
+import { getUserSeasonStanding } from "@/src/lib/scoring/getUserSeasonStanding";
+import { finalizeSeasonIfNeeded } from "@/src/lib/scoring/finalizeSeasonIfNeeded";
 
 type ActivityMuscleItem = {
   name: string;
@@ -216,23 +219,104 @@ export default async function GroupByIdPage({
 
   if (!group) redirect("/home");
 
-  const isAdmin = membership.role === "admin";
-  const now = new Date();
+const isAdmin = membership.role === "admin";
+const now = new Date();
 
-  const activeSeason =
-    group.seasons.find(
-      (season) =>
-        new Date(season.startDate) <= now && new Date(season.endDate) >= now
-    ) ?? null;
+// Auto-finalizar temporadas activas cuyo endDate ya pasó
+const seasonsToAutoFinalize = group.seasons.filter(
+  (season) =>
+    season.isActive &&
+    !season.endedAt &&
+    new Date(season.endDate).getTime() <= now.getTime()
+);
 
-  const upcomingSeason =
-    group.seasons.find((season) => new Date(season.startDate) > now) ?? null;
+if (seasonsToAutoFinalize.length > 0) {
+  for (const season of seasonsToAutoFinalize) {
+    await finalizeSeasonIfNeeded(season.id);
+  }
+}
 
-  const pastSeasons = group.seasons.filter(
-    (season) => new Date(season.endDate) < now
-  );
+const freshGroup =
+  seasonsToAutoFinalize.length > 0
+    ? await prisma.group.findUnique({
+        where: { id: groupId },
+        include: {
+          members: {
+            where: { leftAt: null },
+            select: {
+              id: true,
+              userId: true,
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  photoUrl: true,
+                },
+              },
+            },
+          },
+          seasons: {
+            orderBy: { startDate: "desc" },
+            include: {
+              members: {
+                where: { leftAt: null },
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      photoUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    : group;
 
-  const memberIds = group.members.map((member) => member.userId);
+if (!freshGroup) redirect("/home");
+
+const activeSeason =
+  freshGroup.seasons.find(
+    (season) =>
+      season.isActive &&
+      !season.endedAt &&
+      new Date(season.startDate).getTime() <= now.getTime() &&
+      new Date(season.endDate).getTime() >= now.getTime()
+  ) ?? null;
+
+const userJoinedActiveSeason = activeSeason
+  ? activeSeason.members.some((member) => member.userId === user.id)
+  : false;
+
+const seasonLeaderboard =
+  activeSeason && userJoinedActiveSeason
+    ? await getSeasonLeaderboard(activeSeason.id)
+    : [];
+
+const userSeasonStanding =
+  activeSeason && userJoinedActiveSeason
+    ? await getUserSeasonStanding(activeSeason.id, user.id)
+    : null;
+
+const upcomingSeason =
+  freshGroup.seasons.find(
+    (season) => new Date(season.startDate).getTime() > now.getTime()
+  ) ?? null;
+
+const pastSeasons = freshGroup.seasons.filter(
+  (season) =>
+    !season.isActive ||
+    !!season.endedAt ||
+    new Date(season.endDate).getTime() < now.getTime()
+);
+
+  const memberIds = freshGroup.members.map((member) => member.userId);
 
 const activities = await prisma.activity.findMany({
   where: {
@@ -350,7 +434,7 @@ const activities = await prisma.activity.findMany({
     awardsByUser.set(earned.userId, current);
   }
 
-  const membersWithStats = group.members
+  const membersWithStats = freshGroup.members
     .map((member) => {
       const memberActivities = seasonScopedActivities.filter(
         (activity) => activity.userId === member.userId
@@ -384,7 +468,7 @@ const activities = await prisma.activity.findMany({
       );
     });
 
-  const seasons = group.seasons.map((season) => {
+  const seasons = freshGroup.seasons.map((season) => {
     const joined = season.members.some((member) => member.userId === user.id);
     const allowedTypes = normalizeAllowedActivityTypes(season.allowedActivityTypes);
 
@@ -425,7 +509,7 @@ const activities = await prisma.activity.findMany({
 
   return (
     <GroupPageClient
-      group={group}
+      group={freshGroup}
       isAdmin={isAdmin}
       activities={actData}
       membersWithStats={membersWithStats}
@@ -434,6 +518,8 @@ const activities = await prisma.activity.findMany({
       pastSeasons={pastSeasons}
       seasons={seasons}
       currentUserId={user.id}
+      seasonLeaderboard={seasonLeaderboard}
+      userSeasonStanding={userSeasonStanding}
     />
   );
 }

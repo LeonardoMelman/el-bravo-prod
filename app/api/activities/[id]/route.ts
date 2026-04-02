@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
+import { recalculateSeasonWeekProgress } from "@/src/lib/scoring/recalculateSeasonWeekProgress";
+import { applyWeeklyBonuses } from "@/src/lib/scoring/applyWeeklyBonuses";
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
 
-export async function DELETE(_req: Request, context: RouteContext) {
   try {
     const user = await getCurrentUser();
 
@@ -14,10 +17,8 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await context.params;
-
     if (!id) {
-      return NextResponse.json({ error: "Activity id required" }, { status: 400 });
+      return NextResponse.json({ error: "Missing activity id" }, { status: 400 });
     }
 
     const activity = await prisma.activity.findUnique({
@@ -25,6 +26,18 @@ export async function DELETE(_req: Request, context: RouteContext) {
       select: {
         id: true,
         userId: true,
+        isDeleted: true,
+        activitySeasons: {
+          select: {
+            seasonId: true,
+            season: {
+              select: {
+                id: true,
+                weeklyGoal: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -36,13 +49,81 @@ export async function DELETE(_req: Request, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await prisma.activity.delete({
-      where: { id },
+    if (activity.isDeleted) {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    const affectedSeasons = activity.activitySeasons.map((item) => ({
+      seasonId: item.seasonId,
+      weeklyGoal: item.season.weeklyGoal,
+    }));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.scoreEvent.deleteMany({
+        where: {
+          activityId: id,
+          userId: user.id,
+        },
+      });
+
+      await tx.activitySeason.deleteMany({
+        where: {
+          activityId: id,
+        },
+      });
+
+      await tx.activityMedia.deleteMany({
+        where: {
+          activityId: id,
+        },
+      });
+
+      await tx.activityExercise.deleteMany({
+        where: {
+          activityId: id,
+        },
+      });
+
+      await tx.activity.update({
+        where: { id },
+        data: {
+          isDeleted: true,
+        },
+      });
+
+      for (const season of affectedSeasons) {
+        const recalculatedWeeks = await recalculateSeasonWeekProgress({
+          tx,
+          seasonId: season.seasonId,
+          userId: user.id,
+          weeklyGoal: season.weeklyGoal,
+        });
+
+        await tx.scoreEvent.deleteMany({
+          where: {
+            seasonId: season.seasonId,
+            userId: user.id,
+            type: {
+              in: ["weekly_streak_bonus", "perfect_week_bonus"],
+            },
+          },
+        });
+
+        for (const week of recalculatedWeeks) {
+          await applyWeeklyBonuses({
+            tx,
+            seasonId: season.seasonId,
+            userId: user.id,
+            weekStart: week.weekStart,
+          });
+        }
+      }
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     console.error("/api/activities/[id] DELETE error:", err);
+
     return NextResponse.json(
       { error: "Error deleting activity" },
       { status: 500 }

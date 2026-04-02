@@ -250,6 +250,7 @@ export default async function HomePage() {
     prisma.activity.findMany({
       where: {
         userId: user.id,
+        isDeleted: false,
       },
       orderBy: {
         startedAt: "desc",

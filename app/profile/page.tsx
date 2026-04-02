@@ -347,7 +347,10 @@ export default async function ProfilePage() {
 
   const [activitiesRaw, membershipsRaw, routinesRaw, evaluatedAwardsRaw] = await Promise.all([
     prisma.activity.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        isDeleted: false,
+      },
       select: {
         id: true,
         type: true,
@@ -642,8 +645,8 @@ export default async function ProfilePage() {
                     No hay actividad cargada todavía.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {activities.slice(0, 8).map((activity: ActivityForStats) => {
+                  <div className="scrollbar-elbravo max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                      {activities.map((activity: ActivityForStats) => {
                       const minutes = getActivityDurationMinutes(activity);
 
                       return (

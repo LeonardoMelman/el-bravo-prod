@@ -97,6 +97,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid dates" }, { status: 400 });
     }
 
+    const overlappingSeason = await prisma.season.findFirst({
+      where: {
+        groupId,
+        OR: [
+          {
+            startDate: { lte: end },
+            endDate: { gte: start },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        isActive: true,
+      },
+    });
+
+    if (overlappingSeason) {
+      return NextResponse.json(
+        {
+          error: `Las fechas se superponen con la temporada "${overlappingSeason.name}"`,
+        },
+        { status: 400 }
+      );
+    }
+
     const season = await prisma.$transaction(async (tx) => {
       const created = await tx.season.create({
         data: {
