@@ -2,8 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type ExerciseMeasureType = "reps" | "duration";
+
 type AvailableExercise = {
   id: string;
+  name: string;
+  measureType: ExerciseMeasureType;
+};
+
+type ActivityCategory = {
+  id: string;
+  slug: string;
   name: string;
 };
 
@@ -11,8 +20,10 @@ type RoutineExercise = {
   id?: string;
   exerciseId: string;
   name: string;
+  measureType: ExerciseMeasureType;
   sets: number;
-  reps: number;
+  reps?: number | null;
+  durationSeconds?: number | null;
   weightKg?: number | null;
 };
 
@@ -24,8 +35,10 @@ type RoutineItem = {
 
 type ActivityExerciseFormItem = {
   exerciseId: string;
+  measureType: ExerciseMeasureType;
   sets: number;
-  reps: number;
+  reps: string;
+  durationSeconds: string;
   weightKg: string;
 };
 
@@ -38,7 +51,6 @@ function getDefaultDate() {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-
   return `${year}-${month}-${day}`;
 }
 
@@ -51,11 +63,22 @@ function buildDateTime(date: string, time: string) {
   return new Date(`${date}T${time}:00`);
 }
 
+function getExerciseMeasureType(
+  exerciseId: string,
+  availableExercises: AvailableExercise[]
+): ExerciseMeasureType {
+  return (
+    availableExercises.find((exercise) => exercise.id === exerciseId)?.measureType ??
+    "reps"
+  );
+}
+
 export default function CreateActivityForm() {
   const [availableExercises, setAvailableExercises] = useState<AvailableExercise[]>([]);
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
+  const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
 
-  const [activityType, setActivityType] = useState("gym");
+  const [activityCategoryId, setActivityCategoryId] = useState("");
   const [date, setDate] = useState(getDefaultDate());
   const [startTime, setStartTime] = useState(getDefaultStartTime());
   const [durationMinutes, setDurationMinutes] = useState("60");
@@ -64,7 +87,9 @@ export default function CreateActivityForm() {
 
   const [exercises, setExercises] = useState<ActivityExerciseFormItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [updatingRoutine, setUpdatingRoutine] = useState(false);
   const [error, setError] = useState("");
+  const [updateRoutineMessage, setUpdateRoutineMessage] = useState("");
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
@@ -73,13 +98,15 @@ export default function CreateActivityForm() {
         setLoadingData(true);
         setError("");
 
-        const [exerciseRes, routineRes] = await Promise.all([
+        const [exerciseRes, routineRes, categoryRes] = await Promise.all([
           fetch("/api/exercise/list", { cache: "no-store" }),
           fetch("/api/routine/list", { cache: "no-store" }),
+          fetch("/api/activity-types/list", { cache: "no-store" }),
         ]);
 
         const exerciseData = await exerciseRes.json().catch(() => ({}));
         const routineData = await routineRes.json().catch(() => ({}));
+        const categoryData = await categoryRes.json().catch(() => ({}));
 
         if (!exerciseRes.ok) {
           throw new Error(exerciseData?.error || "No se pudieron cargar los ejercicios.");
@@ -89,24 +116,34 @@ export default function CreateActivityForm() {
           throw new Error(routineData?.error || "No se pudieron cargar las rutinas.");
         }
 
-        setAvailableExercises(
-          Array.isArray(exerciseData)
-            ? exerciseData
-            : Array.isArray(exerciseData?.exercises)
-              ? exerciseData.exercises
-              : []
-        );
+        if (!categoryRes.ok) {
+          throw new Error(categoryData?.error || "No se pudieron cargar los tipos.");
+        }
 
-        setRoutines(
-          Array.isArray(routineData)
-            ? routineData
-            : Array.isArray(routineData?.routines)
-              ? routineData.routines
-              : []
-        );
+        const loadedExercises = Array.isArray(exerciseData)
+          ? exerciseData
+          : Array.isArray(exerciseData?.exercises)
+          ? exerciseData.exercises
+          : [];
+
+        const loadedRoutines = Array.isArray(routineData)
+          ? routineData
+          : Array.isArray(routineData?.routines)
+          ? routineData.routines
+          : [];
+
+        const loadedCategories = Array.isArray(categoryData) ? categoryData : [];
+
+        setAvailableExercises(loadedExercises);
+        setRoutines(loadedRoutines);
+        setActivityCategories(loadedCategories);
+
+        if (loadedCategories.length > 0) {
+          setActivityCategoryId((prev) => prev || loadedCategories[0].id);
+        }
       } catch (err: any) {
         console.error("Error cargando datos de actividades:", err);
-        setError(err?.message || "Error cargando ejercicios y rutinas.");
+        setError(err?.message || "Error cargando ejercicios, rutinas y tipos.");
       } finally {
         setLoadingData(false);
       }
@@ -120,9 +157,12 @@ export default function CreateActivityForm() {
     [routines, selectedRoutineId]
   );
 
+  const hasSelectedRoutine = !!selectedRoutineId && !!selectedRoutine;
+
   function applyRoutine(routineId: string) {
     setSelectedRoutineId(routineId);
     setError("");
+    setUpdateRoutineMessage("");
 
     const routine = routines.find((item) => item.id === routineId);
 
@@ -133,8 +173,16 @@ export default function CreateActivityForm() {
 
     const mapped = routine.exercises.map((exercise) => ({
       exerciseId: exercise.exerciseId,
+      measureType: exercise.measureType ?? "reps",
       sets: Number(exercise.sets ?? 3),
-      reps: Number(exercise.reps ?? 10),
+      reps:
+        exercise.reps !== null && exercise.reps !== undefined
+          ? String(exercise.reps)
+          : "",
+      durationSeconds:
+        exercise.durationSeconds !== null && exercise.durationSeconds !== undefined
+          ? String(exercise.durationSeconds)
+          : "",
       weightKg:
         exercise.weightKg !== null && exercise.weightKg !== undefined
           ? String(exercise.weightKg)
@@ -146,12 +194,15 @@ export default function CreateActivityForm() {
 
   function addExercise() {
     setError("");
+    setUpdateRoutineMessage("");
     setExercises((prev) => [
       ...prev,
       {
         exerciseId: "",
+        measureType: "reps",
         sets: 3,
-        reps: 10,
+        reps: "10",
+        durationSeconds: "",
         weightKg: "",
       },
     ]);
@@ -159,20 +210,160 @@ export default function CreateActivityForm() {
 
   function updateExercise(index: number, patch: Partial<ActivityExerciseFormItem>) {
     setError("");
+    setUpdateRoutineMessage("");
     setExercises((prev) =>
       prev.map((exercise, i) => (i === index ? { ...exercise, ...patch } : exercise))
     );
   }
 
+  function handleExerciseChange(index: number, exerciseId: string) {
+    const measureType = getExerciseMeasureType(exerciseId, availableExercises);
+
+    updateExercise(index, {
+      exerciseId,
+      measureType,
+      reps: measureType === "reps" ? "10" : "",
+      durationSeconds: measureType === "duration" ? "30" : "",
+    });
+  }
+
   function removeExercise(index: number) {
     setError("");
+    setUpdateRoutineMessage("");
     setExercises((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function validateExercisesForSave() {
+    if (exercises.length === 0) {
+      return "Carga por lo menos un ejercicio para guardar tu actividad.";
+    }
+
+    for (const exercise of exercises) {
+      if (!exercise.exerciseId) {
+        return "Todos los ejercicios deben estar seleccionados.";
+      }
+
+      if (!exercise.sets || exercise.sets <= 0) {
+        return "Todas las series deben ser mayores a 0.";
+      }
+
+      if (exercise.measureType === "reps") {
+        if (!exercise.reps || Number(exercise.reps) <= 0) {
+          return "Todos los ejercicios por repeticiones deben tener reps mayores a 0.";
+        }
+      }
+
+      if (exercise.measureType === "duration") {
+        if (!exercise.durationSeconds || Number(exercise.durationSeconds) <= 0) {
+          return "Todos los ejercicios por tiempo deben tener una duración mayor a 0.";
+        }
+      }
+
+      if (
+        exercise.weightKg.trim() !== "" &&
+        (!Number.isFinite(Number(exercise.weightKg)) || Number(exercise.weightKg) < 0)
+      ) {
+        return "El peso debe ser un número válido mayor o igual a 0.";
+      }
+    }
+
+    return null;
+  }
+
+  function normalizeExercisesPayload() {
+    return exercises.map((exercise) => ({
+      exerciseId: exercise.exerciseId,
+      sets: Number(exercise.sets),
+      reps:
+        exercise.measureType === "reps" && exercise.reps.trim() !== ""
+          ? Number(exercise.reps)
+          : null,
+      durationSeconds:
+        exercise.measureType === "duration" && exercise.durationSeconds.trim() !== ""
+          ? Number(exercise.durationSeconds)
+          : null,
+      weightKg: exercise.weightKg.trim() === "" ? null : Number(exercise.weightKg),
+    }));
+  }
+
+  async function handleUpdateRoutine() {
+    setError("");
+    setUpdateRoutineMessage("");
+
+    if (!selectedRoutine) return;
+
+    const validationError = validateExercisesForSave();
+    if (validationError) {
+      setUpdateRoutineMessage(validationError);
+      return;
+    }
+
+    const normalizedExercises = normalizeExercisesPayload();
+
+    setUpdatingRoutine(true);
+
+    try {
+      const res = await fetch(`/api/routine/${selectedRoutine.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: selectedRoutine.name,
+          exercises: normalizedExercises,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setUpdateRoutineMessage(data?.error || "No se pudo actualizar la rutina.");
+        return;
+      }
+
+      setRoutines((prev) =>
+        prev.map((routine) =>
+          routine.id === selectedRoutine.id
+            ? {
+                ...routine,
+                exercises: normalizedExercises.map((exercise) => {
+                  const available = availableExercises.find(
+                    (item) => item.id === exercise.exerciseId
+                  );
+
+                  return {
+                    exerciseId: exercise.exerciseId,
+                    name: available?.name ?? "",
+                    measureType: available?.measureType ?? "reps",
+                    sets: exercise.sets,
+                    reps: exercise.reps,
+                    durationSeconds: exercise.durationSeconds,
+                    weightKg: exercise.weightKg,
+                  };
+                }),
+              }
+            : routine
+        )
+      );
+
+      setUpdateRoutineMessage(`Rutina "${selectedRoutine.name}" actualizada correctamente.`);
+    } catch (err) {
+      console.error("Error actualizando rutina:", err);
+      setUpdateRoutineMessage("Ocurrió un error de red al actualizar la rutina.");
+    } finally {
+      setUpdatingRoutine(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     setError("");
+
+    if (!activityCategoryId) {
+      setError("Seleccioná un tipo de actividad.");
+      return;
+    }
 
     if (!date || !startTime) {
       setError("Completá la fecha y la hora de inicio.");
@@ -186,34 +377,10 @@ export default function CreateActivityForm() {
       return;
     }
 
-    if (exercises.length === 0) {
-      setError("Carga por lo menos un ejercicio para guardar tu actividad.");
+    const validationError = validateExercisesForSave();
+    if (validationError) {
+      setError(validationError);
       return;
-    }
-
-    for (const exercise of exercises) {
-      if (!exercise.exerciseId) {
-        setError("Todos los ejercicios deben estar seleccionados.");
-        return;
-      }
-
-      if (!exercise.sets || exercise.sets <= 0) {
-        setError("Todas las series deben ser mayores a 0.");
-        return;
-      }
-
-      if (!exercise.reps || exercise.reps <= 0) {
-        setError("Todas las repeticiones deben ser mayores a 0.");
-        return;
-      }
-
-      if (
-        exercise.weightKg.trim() !== "" &&
-        (!Number.isFinite(Number(exercise.weightKg)) || Number(exercise.weightKg) < 0)
-      ) {
-        setError("El peso debe ser un número válido mayor o igual a 0.");
-        return;
-      }
     }
 
     const startedAt = buildDateTime(date, startTime);
@@ -231,15 +398,10 @@ export default function CreateActivityForm() {
       const payload = {
         startedAt: startedAt.toISOString(),
         endedAt: endedAt.toISOString(),
-        type: activityType,
+        activityCategoryId,
         notes: notes.trim() || null,
         routineId: selectedRoutineId || null,
-        exercises: exercises.map((exercise) => ({
-          exerciseId: exercise.exerciseId,
-          sets: Number(exercise.sets),
-          reps: Number(exercise.reps),
-          weightKg: exercise.weightKg.trim() === "" ? null : Number(exercise.weightKg),
-        })),
+        exercises: normalizeExercisesPayload(),
       };
 
       const res = await fetch("/api/activities/create", {
@@ -282,15 +444,16 @@ export default function CreateActivityForm() {
               Tipo de actividad
             </label>
             <select
-              value={activityType}
-              onChange={(e) => setActivityType(e.target.value)}
+              value={activityCategoryId}
+              onChange={(e) => setActivityCategoryId(e.target.value)}
               className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
             >
-              <option value="gym">Gimnasio</option>
-              <option value="run">Running</option>
-              <option value="sport">Deporte</option>
-              <option value="mobility">Movilidad</option>
-              <option value="other">Otro</option>
+              <option value="">Seleccionar tipo</option>
+              {activityCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -378,18 +541,43 @@ export default function CreateActivityForm() {
             <div>
               <h2 className="text-lg font-semibold text-white">Ejercicios</h2>
               <p className="text-sm text-slate-400">
-                Agregá ejercicios, series, repeticiones y peso.
+                Agregá ejercicios, series y reps o tiempo según corresponda.
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={addExercise}
-              className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-500"
-            >
-              + Agregar ejercicio
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasSelectedRoutine ? (
+                <button
+                  type="button"
+                  onClick={handleUpdateRoutine}
+                  disabled={updatingRoutine || saving || loadingData}
+                  className="rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {updatingRoutine ? "Actualizando..." : "Actualizar rutina"}
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={addExercise}
+                className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-500"
+              >
+                + Agregar ejercicio
+              </button>
+            </div>
           </div>
+
+          {updateRoutineMessage ? (
+            <div
+              className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+                updateRoutineMessage.includes("correctamente")
+                  ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border border-amber-500/40 bg-amber-500/10 text-amber-300"
+              }`}
+            >
+              {updateRoutineMessage}
+            </div>
+          ) : null}
 
           {loadingData ? (
             <div className="rounded-lg bg-slate-900 px-4 py-4 text-sm text-slate-400">
@@ -413,9 +601,7 @@ export default function CreateActivityForm() {
                       </label>
                       <select
                         value={exercise.exerciseId}
-                        onChange={(e) =>
-                          updateExercise(index, { exerciseId: e.target.value })
-                        }
+                        onChange={(e) => handleExerciseChange(index, e.target.value)}
                         className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
                       >
                         <option value="">Seleccionar ejercicio</option>
@@ -443,21 +629,40 @@ export default function CreateActivityForm() {
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">
-                        Reps
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={exercise.reps}
-                        onChange={(e) =>
-                          updateExercise(index, { reps: Number(e.target.value) })
-                        }
-                        className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                      />
-                    </div>
+                    {exercise.measureType === "duration" ? (
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-slate-200">
+                          Tiempo (seg)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={exercise.durationSeconds}
+                          onChange={(e) =>
+                            updateExercise(index, { durationSeconds: e.target.value })
+                          }
+                          className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                          placeholder="Ej: 30"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-slate-200">
+                          Reps
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={exercise.reps}
+                          onChange={(e) =>
+                            updateExercise(index, { reps: e.target.value })
+                          }
+                          className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                        />
+                      </div>
+                    )}
 
                     <div>
                       <label className="mb-2 block text-sm font-semibold text-slate-200">
@@ -490,12 +695,6 @@ export default function CreateActivityForm() {
               ))}
             </div>
           )}
-
-          {exercises.length === 0 ? (
-            <p className="mt-3 text-sm text-amber-300">
-              Carga por lo menos un ejercicio para guardar tu actividad.
-            </p>
-          ) : null}
         </div>
 
         {error ? (
@@ -504,11 +703,11 @@ export default function CreateActivityForm() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={saving || exercises.length === 0}
-            className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving || loadingData}
+            className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? "Guardando..." : "Guardar actividad"}
           </button>
@@ -516,7 +715,7 @@ export default function CreateActivityForm() {
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="rounded-lg bg-slate-600 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-500"
+            className="rounded-lg bg-slate-700 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-600"
           >
             Cancelar
           </button>

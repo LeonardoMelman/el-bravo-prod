@@ -54,19 +54,43 @@ export async function POST(req: Request) {
       );
     }
 
-    await prisma.seasonMember.create({
-      data: {
+    const existingActiveMembership = await prisma.seasonMember.findFirst({
+      where: {
         seasonId,
         userId: user.id,
+        leftAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingActiveMembership) {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    const now = new Date();
+
+    await prisma.seasonMember.upsert({
+      where: {
+        seasonId_userId: {
+          seasonId,
+          userId: user.id,
+        },
+      },
+      create: {
+        seasonId,
+        userId: user.id,
+        joinedAt: now,
+      },
+      update: {
+        leftAt: null,
+        joinedAt: now,
       },
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
+  } catch (error) {
     console.error("/api/seasons/join error:", error);
     return NextResponse.json({ error: "Error joining season" }, { status: 500 });
   }

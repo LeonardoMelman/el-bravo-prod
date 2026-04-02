@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../src/lib/db";
+import { getCurrentUser } from "@/src/lib/currentUser";
 
 // ==========================
 // GET /api/routine/[id]
@@ -18,8 +19,16 @@ export async function GET(
       );
     }
 
-    const routine = await prisma.routine.findUnique({
-      where: { id },
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const routine = await prisma.routine.findFirst({
+      where: {
+        id,
+        userId: user.id,
+      },
       include: {
         exercises: {
           include: {
@@ -41,8 +50,11 @@ export async function GET(
       name: routine.name,
       exercises: routine.exercises.map((re) => ({
         exerciseId: re.exerciseId,
+        name: re.exercise.name,
+        measureType: re.exercise.measureType,
         sets: re.sets,
-        reps: re.reps,
+        reps: re.reps ?? null,
+        durationSeconds: re.durationSeconds ?? null,
         weightKg: re.weightKg ?? null,
       })),
     });
@@ -65,6 +77,11 @@ export async function PUT(
   const { id } = await params;
 
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { name, exercises } = body;
 
@@ -75,6 +92,48 @@ export async function PUT(
       );
     }
 
+    const routine = await prisma.routine.findFirst({
+      where: {
+        id,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!routine) {
+      return NextResponse.json(
+        { error: "Rutina no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    const exerciseIds = Array.from(
+      new Set(
+        exercises
+          .map((e: any) => e.exerciseId)
+          .filter((exerciseId: unknown) => typeof exerciseId === "string" && exerciseId)
+      )
+    );
+
+    const existingExercises =
+      exerciseIds.length > 0
+        ? await prisma.exercise.findMany({
+            where: { id: { in: exerciseIds } },
+            select: { id: true, measureType: true },
+          })
+        : [];
+
+    if (existingExercises.length !== exerciseIds.length) {
+      return NextResponse.json(
+        { error: "One or more exercises do not exist" },
+        { status: 400 }
+      );
+    }
+
+    const exerciseById = new Map(existingExercises.map((item) => [item.id, item]));
+
     await prisma.routineExercise.deleteMany({
       where: { routineId: id },
     });
@@ -84,17 +143,37 @@ export async function PUT(
       data: {
         name,
         exercises: {
-          create: exercises.map((ex: any) => ({
-            exerciseId: ex.exerciseId,
-            sets: Number(ex.sets),
-            reps: Number(ex.reps),
-            weightKg:
-              ex.weightKg === null ||
-              ex.weightKg === undefined ||
-              ex.weightKg === ""
+          create: exercises.map((ex: any) => {
+            const exercise = exerciseById.get(ex.exerciseId)!;
+
+            const reps =
+              ex.reps === null || ex.reps === undefined || ex.reps === ""
                 ? null
-                : Number(ex.weightKg),
-          })),
+                : Number(ex.reps);
+
+            const durationSeconds =
+              ex.durationSeconds === null ||
+              ex.durationSeconds === undefined ||
+              ex.durationSeconds === ""
+                ? null
+                : Number(ex.durationSeconds);
+
+            return {
+              sets: Number(ex.sets),
+              reps: exercise.measureType === "reps" ? reps : null,
+              durationSeconds:
+                exercise.measureType === "duration" ? durationSeconds : null,
+              weightKg:
+                ex.weightKg === null ||
+                ex.weightKg === undefined ||
+                ex.weightKg === ""
+                  ? null
+                  : Number(ex.weightKg),
+              exercise: {
+                connect: { id: ex.exerciseId },
+              },
+            };
+          }),
         },
       },
     });
@@ -123,6 +202,28 @@ export async function DELETE(
       return NextResponse.json(
         { error: "ID inválido" },
         { status: 400 }
+      );
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const routine = await prisma.routine.findFirst({
+      where: {
+        id,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!routine) {
+      return NextResponse.json(
+        { error: "Rutina no encontrada" },
+        { status: 404 }
       );
     }
 

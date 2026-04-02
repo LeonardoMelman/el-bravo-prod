@@ -2,24 +2,15 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 
-const ALLOWED_ACTIVITY_TYPES = ["gym", "run", "sport", "mobility", "other"] as const;
-
 function parseDateOnly(value: string) {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 }
 
-function normalizeAllowedActivityTypes(input: unknown) {
+function normalizeAllowedActivityCategoryIds(input: unknown) {
   if (!Array.isArray(input)) return [];
-
   return Array.from(
-    new Set(
-      input.filter(
-        (value): value is (typeof ALLOWED_ACTIVITY_TYPES)[number] =>
-          typeof value === "string" &&
-          ALLOWED_ACTIVITY_TYPES.includes(value as (typeof ALLOWED_ACTIVITY_TYPES)[number])
-      )
-    )
+    new Set(input.filter((value): value is string => typeof value === "string" && value.length > 0))
   );
 }
 
@@ -40,7 +31,7 @@ export async function POST(req: Request) {
       endDate,
       minPerWeek,
       description,
-      allowedActivityTypes,
+      allowedActivityCategoryIds,
     } = body ?? {};
 
     if (!groupId || typeof groupId !== "string") {
@@ -61,10 +52,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid weekly goal" }, { status: 400 });
     }
 
-    const normalizedAllowedActivityTypes =
-      normalizeAllowedActivityTypes(allowedActivityTypes);
+    const normalizedAllowedActivityCategoryIds =
+      normalizeAllowedActivityCategoryIds(allowedActivityCategoryIds);
 
-    if (normalizedAllowedActivityTypes.length === 0) {
+    if (normalizedAllowedActivityCategoryIds.length === 0) {
       return NextResponse.json(
         { error: "Select at least one allowed activity type" },
         { status: 400 }
@@ -125,6 +116,24 @@ export async function POST(req: Request) {
       );
     }
 
+    const categories = await prisma.activityCategory.findMany({
+      where: {
+        id: { in: normalizedAllowedActivityCategoryIds },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        slug: true,
+      },
+    });
+
+    if (categories.length !== normalizedAllowedActivityCategoryIds.length) {
+      return NextResponse.json(
+        { error: "One or more activity categories are invalid" },
+        { status: 400 }
+      );
+    }
+
     const season = await prisma.$transaction(async (tx) => {
       const created = await tx.season.create({
         data: {
@@ -137,7 +146,12 @@ export async function POST(req: Request) {
           startDate: start,
           endDate: end,
           weeklyGoal: normalizedWeeklyGoal,
-          allowedActivityTypes: normalizedAllowedActivityTypes,
+          allowedActivityTypes: categories.map((item) => item.slug),
+          allowedActivityTypeLinks: {
+            create: categories.map((item) => ({
+              activityCategoryId: item.id,
+            })),
+          },
         },
       });
 

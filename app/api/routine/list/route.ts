@@ -26,11 +26,13 @@ export async function GET() {
             id: true,
             sets: true,
             reps: true,
+            durationSeconds: true,
             weightKg: true,
             exercise: {
               select: {
                 id: true,
                 name: true,
+                measureType: true,
                 muscles: {
                   select: {
                     exerciseId: true,
@@ -61,8 +63,10 @@ export async function GET() {
         id: entry.id,
         exerciseId: entry.exercise.id,
         name: entry.exercise.name,
+        measureType: entry.exercise.measureType,
         sets: entry.sets,
-        reps: entry.reps,
+        reps: entry.reps ?? null,
+        durationSeconds: entry.durationSeconds ?? null,
         weightKg: entry.weightKg ?? null,
         muscles: entry.exercise.muscles.map((muscleEntry) => ({
           exerciseId: muscleEntry.exerciseId,

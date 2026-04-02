@@ -11,26 +11,42 @@ import { calculateActivityScore } from "@/src/lib/scoring/calculateActivityScore
 import { recalculateSeasonWeekProgress } from "@/src/lib/scoring/recalculateSeasonWeekProgress";
 import { applyWeeklyBonuses } from "@/src/lib/scoring/applyWeeklyBonuses";
 
-type ActivityType = "gym" | "run" | "sport" | "mobility" | "other";
+type LegacyActivityType = "gym" | "run" | "sport" | "mobility" | "other";
 
-function isValidActivityType(value: unknown): value is ActivityType {
-  return (
-    value === "gym" ||
-    value === "run" ||
-    value === "sport" ||
-    value === "mobility" ||
-    value === "other"
-  );
+function mapCategorySlugToLegacyType(slug: string): LegacyActivityType {
+  switch (slug) {
+    case "strength":
+    case "calisthenics":
+      return "gym";
+    case "running":
+    case "trail_running":
+      return "run";
+    case "yoga_pilates":
+      return "mobility";
+    case "cycling":
+    case "indoor_cycling":
+    case "swimming":
+    case "walking_trekking":
+    case "hiit_functional":
+    case "rowing":
+    case "climbing":
+    case "martial_arts":
+    case "dance":
+    case "elliptical":
+    case "ski_snowboard":
+    case "water_sports":
+    case "crossfit":
+    case "skating":
+      return "sport";
+    default:
+      return "other";
+  }
 }
 
-function normalizeAllowedActivityTypes(value: unknown): ActivityType[] | null {
-  if (!Array.isArray(value)) return null;
-
-  const valid = value.filter((item): item is ActivityType =>
-    isValidActivityType(item)
-  );
-
-  return valid.length > 0 ? valid : null;
+function normalizeAllowedActivityCategoryIds(
+  links: Array<{ activityCategoryId: string }>
+): string[] {
+  return Array.from(new Set(links.map((item) => item.activityCategoryId)));
 }
 
 export async function POST(req: Request) {
@@ -47,7 +63,7 @@ export async function POST(req: Request) {
       startedAt,
       endedAt,
       notes,
-      type,
+      activityCategoryId,
       routineId,
       exercises = [],
     } = body ?? {};
@@ -59,11 +75,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const normalizedType: ActivityType = type ?? "gym";
-
-    if (!isValidActivityType(normalizedType)) {
+    if (!activityCategoryId || typeof activityCategoryId !== "string") {
       return NextResponse.json(
-        { error: "Invalid activity type" },
+        { error: "Missing activityCategoryId" },
         { status: 400 }
       );
     }
@@ -83,10 +97,103 @@ export async function POST(req: Request) {
       Math.round((e.getTime() - s.getTime()) / (1000 * 60))
     );
 
+    if (!Array.isArray(exercises) || exercises.length === 0) {
+      return NextResponse.json(
+        { error: "At least one exercise is required" },
+        { status: 400 }
+      );
+    }
+
+    for (const item of exercises) {
+      if (!item?.exerciseId || typeof item.exerciseId !== "string") {
+        return NextResponse.json(
+          { error: "Invalid exerciseId" },
+          { status: 400 }
+        );
+      }
+
+      const sets = Number(item.sets);
+      const reps =
+        item.reps === null || item.reps === undefined || item.reps === ""
+          ? null
+          : Number(item.reps);
+      const durationSeconds =
+        item.durationSeconds === null ||
+        item.durationSeconds === undefined ||
+        item.durationSeconds === ""
+          ? null
+          : Number(item.durationSeconds);
+      const weightKg =
+        item.weightKg === null || item.weightKg === undefined || item.weightKg === ""
+          ? null
+          : Number(item.weightKg);
+
+      if (!Number.isFinite(sets) || sets <= 0) {
+        return NextResponse.json(
+          { error: "Invalid sets value" },
+          { status: 400 }
+        );
+      }
+
+      if (reps !== null && (!Number.isFinite(reps) || reps <= 0)) {
+        return NextResponse.json(
+          { error: "Invalid reps value" },
+          { status: 400 }
+        );
+      }
+
+      if (
+        durationSeconds !== null &&
+        (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid durationSeconds value" },
+          { status: 400 }
+        );
+      }
+
+      if (reps === null && durationSeconds === null) {
+        return NextResponse.json(
+          { error: "Each exercise must define reps or durationSeconds" },
+          { status: 400 }
+        );
+      }
+
+      if (reps !== null && durationSeconds !== null) {
+        return NextResponse.json(
+          { error: "Each exercise must define only reps or durationSeconds" },
+          { status: 400 }
+        );
+      }
+
+      if (weightKg !== null && (!Number.isFinite(weightKg) || weightKg < 0)) {
+        return NextResponse.json(
+          { error: "Invalid weightKg value" },
+          { status: 400 }
+        );
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
+      const activityCategory = await tx.activityCategory.findUnique({
+        where: { id: activityCategoryId },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+        },
+      });
+
+      if (!activityCategory) {
+        return NextResponse.json(
+          { error: "Invalid activity category" },
+          { status: 400 }
+        );
+      }
+
+      const normalizedType = mapCategorySlugToLegacyType(activityCategory.slug);
       const weekStart = startOfWeekMonday(s);
 
-      // 1) Crear actividad
       const activity = await tx.activity.create({
         data: {
           userId: user.id,
@@ -95,29 +202,65 @@ export async function POST(req: Request) {
           durationMinutes,
           notes: notes ?? null,
           type: normalizedType,
+          activityCategoryId: activityCategory.id,
           routineId: routineId ?? null,
         },
       });
 
-      // 2) Crear ejercicios de la actividad
-      if (Array.isArray(exercises) && exercises.length > 0) {
-        await tx.activityExercise.createMany({
-          data: exercises.map((item: any) => ({
+      const exerciseIds = [...new Set(exercises.map((item: any) => item.exerciseId))];
+
+      const existingExercises = await tx.exercise.findMany({
+        where: {
+          id: { in: exerciseIds },
+        },
+        select: {
+          id: true,
+          measureType: true,
+        },
+      });
+
+      const exerciseById = new Map(existingExercises.map((item) => [item.id, item]));
+
+      if (existingExercises.length !== exerciseIds.length) {
+        return NextResponse.json(
+          { error: "One or more exercises do not exist" },
+          { status: 400 }
+        );
+      }
+
+      await tx.activityExercise.createMany({
+        data: exercises.map((item: any) => {
+          const exercise = exerciseById.get(item.exerciseId)!;
+
+          const reps =
+            item.reps === null || item.reps === undefined || item.reps === ""
+              ? null
+              : Number(item.reps);
+
+          const durationSeconds =
+            item.durationSeconds === null ||
+            item.durationSeconds === undefined ||
+            item.durationSeconds === ""
+              ? null
+              : Number(item.durationSeconds);
+
+          return {
             activityId: activity.id,
             exerciseId: item.exerciseId,
             sets: Number(item.sets),
-            reps: Number(item.reps),
+            reps: exercise.measureType === "reps" ? reps : null,
+            durationSeconds:
+              exercise.measureType === "duration" ? durationSeconds : null,
             weightKg:
               item.weightKg === null ||
               item.weightKg === undefined ||
               item.weightKg === ""
                 ? null
                 : Number(item.weightKg),
-          })),
-        });
-      }
+          };
+        }),
+      });
 
-      // 3) Seasons activas aplicables del usuario
       const candidateSeasons = await tx.season.findMany({
         where: {
           isActive: true,
@@ -136,26 +279,29 @@ export async function POST(req: Request) {
           basePointsPerActivity: true,
           weeklyStreakBonus: true,
           perfectWeekBonus: true,
-          allowedActivityTypes: true,
+          allowedActivityTypeLinks: {
+            select: {
+              activityCategoryId: true,
+            },
+          },
           maxScoreableMinutesPerActivity: true,
         },
       });
 
-      const createdScoreEvents: Array<{
-        seasonId: string;
-        points: number;
-      }> = [];
+      const createdScoreEvents: Array<{ seasonId: string; points: number }> = [];
 
       for (const season of candidateSeasons) {
-        const allowedTypes = normalizeAllowedActivityTypes(
-          season.allowedActivityTypes
+        const allowedCategoryIds = normalizeAllowedActivityCategoryIds(
+          season.allowedActivityTypeLinks
         );
 
-        if (allowedTypes && !allowedTypes.includes(normalizedType)) {
+        if (
+          allowedCategoryIds.length > 0 &&
+          !allowedCategoryIds.includes(activityCategory.id)
+        ) {
           continue;
         }
 
-        // 4) Historial previo del usuario en ESA season
         const previousLinkedActivities = await tx.activitySeason.findMany({
           where: {
             seasonId: season.id,
@@ -217,7 +363,6 @@ export async function POST(req: Request) {
           ? diffInFullDays(s, previousActivity.startedAt)
           : null;
 
-        // 5) Calcular score
         const score = calculateActivityScore({
           activity: {
             id: activity.id,
@@ -230,7 +375,7 @@ export async function POST(req: Request) {
             id: season.id,
             weeklyGoal: season.weeklyGoal,
             basePointsPerActivity: season.basePointsPerActivity,
-            allowedActivityTypes: season.allowedActivityTypes,
+            allowedActivityTypes: [activityCategory.slug],
             maxScoreableMinutesPerActivity:
               season.maxScoreableMinutesPerActivity,
           },
@@ -243,7 +388,6 @@ export async function POST(req: Request) {
           continue;
         }
 
-        // 6) Vincular actividad a season
         await tx.activitySeason.create({
           data: {
             activityId: activity.id,
@@ -251,7 +395,6 @@ export async function POST(req: Request) {
           },
         });
 
-        // 7) Crear ScoreEvent base
         await tx.scoreEvent.create({
           data: {
             seasonId: season.id,
@@ -261,7 +404,12 @@ export async function POST(req: Request) {
             type: "activity_base",
             points: score.totalPoints,
             reason: "Scoring base por actividad",
-            metadata: score.metadata,
+            metadata: {
+              ...score.metadata,
+              activityCategoryId: activityCategory.id,
+              activityCategorySlug: activityCategory.slug,
+              activityCategoryName: activityCategory.name,
+            },
           },
         });
 
@@ -270,7 +418,6 @@ export async function POST(req: Request) {
           points: score.totalPoints,
         });
 
-        // 8) Recalcular progreso semanal completo
         const recalculatedWeeks = await recalculateSeasonWeekProgress({
           tx,
           seasonId: season.id,
@@ -278,7 +425,6 @@ export async function POST(req: Request) {
           weeklyGoal: season.weeklyGoal,
         });
 
-        // 9) Borrar bonus semanales viejos de la season/user
         await tx.scoreEvent.deleteMany({
           where: {
             seasonId: season.id,
@@ -289,7 +435,6 @@ export async function POST(req: Request) {
           },
         });
 
-        // 10) Reaplicar bonus semanales sobre todas las semanas recalculadas
         for (const week of recalculatedWeeks) {
           await applyWeeklyBonuses({
             tx,
@@ -301,19 +446,19 @@ export async function POST(req: Request) {
       }
 
       return {
-        id: activity.id,
-        durationMinutes,
+        ok: true,
+        activityId: activity.id,
         createdScoreEvents,
       };
     });
 
+    if (result instanceof NextResponse) {
+      return result;
+    }
+
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     console.error("/api/activities/create error:", err);
-
-    return NextResponse.json(
-      { error: "Error creating activity" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error creating activity" }, { status: 500 });
   }
 }

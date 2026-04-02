@@ -510,7 +510,7 @@ export default async function ProfilePage() {
                     subtitle="semanas consecutivas"
                   />
                   <ProfileStatCard
-                    label="más minutos en una semana"
+                    label="mayor tiempo entrenado en una semana"
                     value={formatMinutes(stats.maxWeeklyMinutes)}
                   />
                   <ProfileStatCard
@@ -518,7 +518,7 @@ export default async function ProfilePage() {
                     value={formatMinutes(stats.longestWorkoutMinutes)}
                   />
                   <ProfileStatCard
-                    label="minutos totales"
+                    label="tiempo total de entrenamiento"
                     value={formatMinutes(stats.totalMinutes)}
                     subtitle={`promedio ${formatMinutes(stats.averageMinutes)}`}
                   />

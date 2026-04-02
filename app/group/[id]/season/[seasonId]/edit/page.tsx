@@ -11,13 +11,6 @@ function toDateInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeAllowedActivityTypes(value: unknown): string[] {
-  if (!Array.isArray(value)) return ["gym"];
-
-  const filtered = value.filter((item): item is string => typeof item === "string");
-  return filtered.length > 0 ? Array.from(new Set(filtered)) : ["gym"];
-}
-
 export default async function EditSeasonPage({
   params,
 }: {
@@ -54,7 +47,11 @@ export default async function EditSeasonPage({
       startDate: true,
       endDate: true,
       weeklyGoal: true,
-      allowedActivityTypes: true,
+      allowedActivityTypeLinks: {
+        select: {
+          activityCategoryId: true,
+        },
+      },
     },
   });
 
@@ -90,8 +87,8 @@ export default async function EditSeasonPage({
             initialStartDate={toDateInputValue(season.startDate)}
             initialEndDate={toDateInputValue(season.endDate)}
             initialWeeklyGoal={season.weeklyGoal}
-            initialAllowedActivityTypes={normalizeAllowedActivityTypes(
-              season.allowedActivityTypes
+            initialAllowedActivityCategoryIds={season.allowedActivityTypeLinks.map(
+              (item: { activityCategoryId: string }) => item.activityCategoryId
             )}
           />
         </section>

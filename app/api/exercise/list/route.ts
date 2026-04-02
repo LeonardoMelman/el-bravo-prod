@@ -24,6 +24,7 @@ export async function GET() {
     const exercises = exercisesRaw.map((exercise: any) => ({
       id: exercise.id,
       name: exercise.name,
+      measureType: exercise.measureType,
       muscles: Array.isArray(exercise.muscles)
         ? exercise.muscles.map((relation: any) => ({
             id: relation.id,

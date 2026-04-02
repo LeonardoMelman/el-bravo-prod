@@ -3,18 +3,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 
-type ActivityTypeOption = {
-  value: string;
-  label: string;
+type ActivityCategoryOption = {
+  id: string;
+  slug: string;
+  name: string;
 };
-
-const ACTIVITY_TYPE_OPTIONS: ActivityTypeOption[] = [
-  { value: "gym", label: "Gimnasio" },
-  { value: "run", label: "Running" },
-  { value: "sport", label: "Deporte" },
-  { value: "mobility", label: "Movilidad" },
-  { value: "other", label: "Otro" },
-];
 
 function toDateInputValue(d: Date) {
   const year = d.getFullYear();
@@ -23,8 +16,11 @@ function toDateInputValue(d: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function getActivityTypeLabel(type: string) {
-  return ACTIVITY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
+function getActivityTypeLabel(
+  id: string,
+  items: ActivityCategoryOption[]
+) {
+  return items.find((option) => option.id === id)?.name ?? id;
 }
 
 function rangesOverlap(
@@ -48,51 +44,72 @@ export default function CreateSeasonPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [minPerWeek, setMinPerWeek] = useState(2);
-  const [allowedActivityTypes, setAllowedActivityTypes] = useState<string[]>(["gym"]);
+  const [allowedActivityCategoryIds, setAllowedActivityCategoryIds] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existingSeasons, setExistingSeasons] = useState<
-  Array<{
-    id: string;
-    name: string;
-    startDate: string;
-    endDate: string;
-    isActive?: boolean;
-  }>
->([]);
+    Array<{
+      id: string;
+      name: string;
+      startDate: string;
+      endDate: string;
+      isActive?: boolean;
+    }>
+  >([]);
+  const [activityCategories, setActivityCategories] = useState<ActivityCategoryOption[]>([]);
 
   const totalSteps = 5;
 
   useEffect(() => {
-  let alive = true;
+    let alive = true;
 
-  async function loadSeasons() {
-    if (!groupId) return;
+    async function loadData() {
+      if (!groupId) return;
 
-    try {
-      const res = await fetch(`/api/groups/${groupId}/seasons`, {
-        method: "GET",
-        credentials: "include",
-      });
+      try {
+        const [seasonRes, categoryRes] = await Promise.all([
+          fetch(`/api/groups/${groupId}/seasons`, {
+            method: "GET",
+            credentials: "include",
+          }),
+          fetch("/api/activity-types/list", {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }),
+        ]);
 
-      if (!res.ok) return;
+        if (seasonRes.ok) {
+          const data = await seasonRes.json().catch(() => []);
+          if (alive) {
+            setExistingSeasons(Array.isArray(data) ? data : []);
+          }
+        }
 
-      const data = await res.json().catch(() => []);
-      if (!alive) return;
-
-      setExistingSeasons(Array.isArray(data) ? data : []);
-    } catch {
-      // silencioso, la validación fuerte queda en backend
+        if (categoryRes.ok) {
+          const data = await categoryRes.json().catch(() => []);
+          if (alive) {
+            const categories = Array.isArray(data) ? data : [];
+            setActivityCategories(categories);
+            if (categories.length > 0) {
+              setAllowedActivityCategoryIds((prev) =>
+                prev.length > 0 ? prev : [categories[0].id]
+              );
+            }
+          }
+        }
+      } catch {
+        // silencioso
+      }
     }
-  }
 
-  loadSeasons();
+    loadData();
 
-  return () => {
-    alive = false;
-  };
-}, [groupId]);
+    return () => {
+      alive = false;
+    };
+  }, [groupId]);
 
   const stepTitles = [
     "Detalles",
@@ -103,7 +120,7 @@ export default function CreateSeasonPage() {
   ];
 
   function toggleActivityType(value: string) {
-    setAllowedActivityTypes((current) => {
+    setAllowedActivityCategoryIds((current) => {
       if (current.includes(value)) {
         if (current.length === 1) return current;
         return current.filter((item) => item !== value);
@@ -162,7 +179,7 @@ export default function CreateSeasonPage() {
     }
 
     if (currentStep === 3) {
-      if (allowedActivityTypes.length === 0) {
+      if (allowedActivityCategoryIds.length === 0) {
         return "Tenés que seleccionar al menos un tipo de actividad permitido";
       }
     }
@@ -184,12 +201,10 @@ export default function CreateSeasonPage() {
     const err = validateAll();
     if (err) {
       setError(err);
-
       if (err.includes("nombre")) setStep(0);
       else if (err.includes("fecha")) setStep(1);
       else if (err.includes("objetivo")) setStep(2);
       else if (err.includes("actividad")) setStep(3);
-
       return;
     }
 
@@ -204,7 +219,7 @@ export default function CreateSeasonPage() {
           startDate,
           endDate,
           minPerWeek,
-          allowedActivityTypes,
+          allowedActivityCategoryIds,
           description,
         }),
       });
@@ -366,21 +381,21 @@ export default function CreateSeasonPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {ACTIVITY_TYPE_OPTIONS.map((option) => {
-                    const selected = allowedActivityTypes.includes(option.value);
+                  {activityCategories.map((option) => {
+                    const selected = allowedActivityCategoryIds.includes(option.id);
 
                     return (
                       <button
-                        key={option.value}
+                        key={option.id}
                         type="button"
-                        onClick={() => toggleActivityType(option.value)}
+                        onClick={() => toggleActivityType(option.id)}
                         className={`rounded-2xl border px-4 py-4 text-left transition ${
                           selected
                             ? "border-lime-500 bg-lime-500/10 text-white"
                             : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
                         }`}
                       >
-                        <div className="font-semibold">{option.label}</div>
+                        <div className="font-semibold">{option.name}</div>
                         <div className="mt-1 text-sm text-slate-400">
                           {selected ? "Incluido en el score" : "No suma puntos"}
                         </div>
@@ -421,12 +436,12 @@ export default function CreateSeasonPage() {
                   <div className="rounded-2xl bg-slate-800 p-4 md:col-span-2">
                     <div className="text-sm text-slate-400">Tipos permitidos</div>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {allowedActivityTypes.map((type) => (
+                      {allowedActivityCategoryIds.map((id) => (
                         <span
-                          key={type}
+                          key={id}
                           className="rounded-full bg-slate-700 px-3 py-1 text-sm text-white"
                         >
-                          {getActivityTypeLabel(type)}
+                          {getActivityTypeLabel(id, activityCategories)}
                         </span>
                       ))}
                     </div>
@@ -452,7 +467,7 @@ export default function CreateSeasonPage() {
               type="button"
               onClick={back}
               disabled={step === 0 || loading}
-              className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Atrás
             </button>
@@ -461,16 +476,16 @@ export default function CreateSeasonPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setError(null);
                   const err = validateStep(step);
                   if (err) {
                     setError(err);
                     return;
                   }
+                  setError(null);
                   next();
                 }}
                 disabled={loading}
-                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-medium text-white hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Siguiente
               </button>
@@ -479,17 +494,16 @@ export default function CreateSeasonPage() {
                 type="button"
                 onClick={handleCreate}
                 disabled={loading}
-                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-medium text-white hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Creando..." : "Confirmar y crear temporada"}
+                {loading ? "Creando..." : "Crear temporada"}
               </button>
             )}
 
             <button
               type="button"
               onClick={() => router.push(`/group/${groupId}`)}
-              disabled={loading}
-              className="ml-auto rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ml-auto rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
             >
               Cancelar
             </button>
