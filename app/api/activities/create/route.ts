@@ -245,7 +245,9 @@ export async function POST(req: Request) {
       });
 
       const exerciseById = new Map(
-        existingExercises.map((item) => [item.id, item])
+        existingExercises.map(
+          (item: { id: string; measureType: "reps" | "duration" }) => [item.id, item]
+        )
       );
 
       if (existingExercises.length !== exerciseIds.length) {
