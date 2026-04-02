@@ -2,22 +2,35 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 
+type SeasonIdRow = {
+  id: string;
+};
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await req.json().catch(() => ({}));
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({} as { groupId?: unknown }));
     const { groupId } = body ?? {};
 
     if (!groupId || typeof groupId !== "string") {
       return NextResponse.json({ error: "Missing groupId" }, { status: 400 });
     }
 
-    // Validar que sea admin activo en ese grupo
     const membership = await prisma.groupMember.findFirst({
-      where: { groupId, userId: user.id, leftAt: null },
-      select: { id: true, role: true },
+      where: {
+        groupId,
+        userId: user.id,
+        leftAt: null,
+      },
+      select: {
+        id: true,
+        role: true,
+      },
     });
 
     if (!membership) {
@@ -28,49 +41,52 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Hard delete: borra TODO lo relacionado al grupo
-    await prisma.$transaction(async (tx) => {
-    const seasons = await tx.season.findMany({
-      where: { groupId },
-      select: { id: true },
-    });
-
-    const seasonIds = seasons.map((season) => season.id);
-
-    if (seasonIds.length > 0) {
-      await tx.awardEarned.deleteMany({
-        where: {
-          seasonId: { in: seasonIds },
-        },
+    await prisma.$transaction(async (tx: any) => {
+      const seasonsRaw = await tx.season.findMany({
+        where: { groupId },
+        select: { id: true },
       });
 
-      await tx.seasonMember.deleteMany({
-        where: {
-          seasonId: { in: seasonIds },
-        },
+      const seasons = seasonsRaw as SeasonIdRow[];
+      const seasonIds: string[] = [];
+
+      for (const season of seasons) {
+        seasonIds.push(season.id);
+      }
+
+      if (seasonIds.length > 0) {
+        await tx.awardEarned.deleteMany({
+          where: {
+            seasonId: { in: seasonIds },
+          },
+        });
+
+        await tx.seasonMember.deleteMany({
+          where: {
+            seasonId: { in: seasonIds },
+          },
+        });
+
+        await tx.season.deleteMany({
+          where: {
+            id: { in: seasonIds },
+          },
+        });
+      }
+
+      await tx.groupMember.deleteMany({
+        where: { groupId },
       });
 
-      await tx.season.deleteMany({
-        where: {
-          id: { in: seasonIds },
-        },
+      await tx.group.delete({
+        where: { id: groupId },
       });
-    }
-
-    await tx.groupMember.deleteMany({
-      where: { groupId },
     });
-
-    await tx.group.delete({
-      where: { id: groupId },
-    });
-  });
 
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (err: any) {
+  } catch (err) {
     console.error("/api/groups/delete error:", err);
 
-    // Si llegara a fallar por FK/restricciones, devolvemos un mensaje simple
     return NextResponse.json(
       { error: "Error deleting group" },
       { status: 500 }
