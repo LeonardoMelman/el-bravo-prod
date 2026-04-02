@@ -1,12 +1,25 @@
-import { Prisma } from "@prisma/client";
 import { addDays, getWeekKey, startOfWeekMonday } from "@/src/lib/scoring/weekUtils";
 
 type Params = {
-  tx: Prisma.TransactionClient;
+  tx: any;
   seasonId: string;
   userId: string;
   weekDate: Date;
   weeklyGoal: number;
+};
+
+type LinkedActivityRow = {
+  activity: {
+    id: string;
+    startedAt: Date;
+    endedAt: Date;
+    durationMinutes: number | null;
+  };
+};
+
+type PreviousWeekRow = {
+  weekStart: Date;
+  goalReached: boolean;
 };
 
 function getDurationMinutes(item: {
@@ -38,7 +51,7 @@ export async function upsertSeasonWeekProgress({
   const weekStart = startOfWeekMonday(weekDate);
   const weekEnd = addDays(weekStart, 7);
 
-  const linkedActivities = await tx.activitySeason.findMany({
+  const linkedActivitiesRaw = await tx.activitySeason.findMany({
     where: {
       seasonId,
       activity: {
@@ -62,10 +75,14 @@ export async function upsertSeasonWeekProgress({
     },
   });
 
+  const linkedActivities = linkedActivitiesRaw as LinkedActivityRow[];
+
   const activitiesCount = linkedActivities.length;
-  const minutesTotal = linkedActivities.reduce((sum, item) => {
-    return sum + getDurationMinutes(item.activity);
-  }, 0);
+
+  let minutesTotal = 0;
+  for (const item of linkedActivities) {
+    minutesTotal += getDurationMinutes(item.activity);
+  }
 
   const pointsAggregate = await tx.scoreEvent.aggregate({
     where: {
@@ -83,7 +100,7 @@ export async function upsertSeasonWeekProgress({
   const goalReached = activitiesCount >= goalTarget;
   const perfectWeek = goalReached;
 
-  const previousWeeks = await tx.seasonWeekProgress.findMany({
+  const previousWeeksRaw = await tx.seasonWeekProgress.findMany({
     where: {
       seasonId,
       userId,
@@ -99,6 +116,8 @@ export async function upsertSeasonWeekProgress({
       goalReached: true,
     },
   });
+
+  const previousWeeks = previousWeeksRaw as PreviousWeekRow[];
 
   let streakCount = goalReached ? 1 : 0;
   let cursor = addDays(weekStart, -7);

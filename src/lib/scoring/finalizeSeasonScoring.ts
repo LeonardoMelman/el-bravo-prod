@@ -1,12 +1,31 @@
-import { Prisma } from "@prisma/client";
 import { getSeasonLeaderboard } from "@/src/lib/scoring/getSeasonLeaderboard";
 
 const PERFECT_STREAK_FINAL_BONUS_TOTAL = 60;
 const LONGEST_SESSION_FINAL_BONUS_TOTAL = 40;
 
 type Params = {
-  tx: Prisma.TransactionClient;
+  tx: any;
   seasonId: string;
+};
+
+type SeasonMemberRow = {
+  userId: string;
+};
+
+type WeekProgressRow = {
+  userId: string;
+  streakCount: number;
+  perfectWeek: boolean;
+};
+
+type ActivitySeasonRow = {
+  activity: {
+    id: string;
+    userId: string;
+    startedAt: Date;
+    endedAt: Date;
+    durationMinutes: number | null;
+  };
 };
 
 function splitBonus(total: number, winnersCount: number) {
@@ -34,7 +53,12 @@ export async function finalizeSeasonScoring({ tx, seasonId }: Params) {
     throw new Error("Season not found");
   }
 
-  const participantIds = season.members.map((member) => member.userId);
+  const members = season.members as SeasonMemberRow[];
+  const participantIds: string[] = [];
+
+  for (const member of members) {
+    participantIds.push(member.userId);
+  }
 
   if (participantIds.length === 0) {
     await tx.season.update({
@@ -63,7 +87,7 @@ export async function finalizeSeasonScoring({ tx, seasonId }: Params) {
     },
   });
 
-  const weekProgress = await tx.seasonWeekProgress.findMany({
+  const weekProgressRaw = await tx.seasonWeekProgress.findMany({
     where: {
       seasonId,
       userId: { in: participantIds },
@@ -75,7 +99,9 @@ export async function finalizeSeasonScoring({ tx, seasonId }: Params) {
     },
   });
 
-  const activities = await tx.activitySeason.findMany({
+  const weekProgress = weekProgressRaw as WeekProgressRow[];
+
+  const activitiesRaw = await tx.activitySeason.findMany({
     where: {
       seasonId,
       activity: {
@@ -95,6 +121,8 @@ export async function finalizeSeasonScoring({ tx, seasonId }: Params) {
       },
     },
   });
+
+  const activities = activitiesRaw as ActivitySeasonRow[];
 
   const longestPerfectStreakByUser = new Map<string, number>();
   for (const userId of participantIds) {
@@ -143,21 +171,23 @@ export async function finalizeSeasonScoring({ tx, seasonId }: Params) {
     0
   );
 
-  const perfectStreakWinners =
-    maxPerfectStreak > 0
-      ? participantIds.filter(
-          (userId) =>
-            (longestPerfectStreakByUser.get(userId) ?? 0) === maxPerfectStreak
-        )
-      : [];
+  const perfectStreakWinners: string[] = [];
+  if (maxPerfectStreak > 0) {
+    for (const userId of participantIds) {
+      if ((longestPerfectStreakByUser.get(userId) ?? 0) === maxPerfectStreak) {
+        perfectStreakWinners.push(userId);
+      }
+    }
+  }
 
-  const longestSessionWinners =
-    maxSessionMinutes > 0
-      ? participantIds.filter(
-          (userId) =>
-            (longestSessionByUser.get(userId) ?? 0) === maxSessionMinutes
-        )
-      : [];
+  const longestSessionWinners: string[] = [];
+  if (maxSessionMinutes > 0) {
+    for (const userId of participantIds) {
+      if ((longestSessionByUser.get(userId) ?? 0) === maxSessionMinutes) {
+        longestSessionWinners.push(userId);
+      }
+    }
+  }
 
   const perfectStreakBonus = splitBonus(
     PERFECT_STREAK_FINAL_BONUS_TOTAL,

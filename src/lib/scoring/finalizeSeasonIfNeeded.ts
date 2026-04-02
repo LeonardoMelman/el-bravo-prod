@@ -21,7 +21,7 @@ export async function finalizeSeasonIfNeeded(seasonId: string) {
     return null;
   }
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     return finalizeSeasonScoring({
       tx,
       seasonId: season.id,

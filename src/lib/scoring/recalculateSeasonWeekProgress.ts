@@ -1,11 +1,26 @@
-import { Prisma } from "@prisma/client";
 import { addDays, getWeekKey, startOfWeekMonday } from "@/src/lib/scoring/weekUtils";
 
 type Params = {
-  tx: Prisma.TransactionClient;
+  tx: any;
   seasonId: string;
   userId: string;
   weeklyGoal: number;
+};
+
+type LinkedActivityRow = {
+  activity: {
+    id: string;
+    startedAt: Date;
+    endedAt: Date;
+    durationMinutes: number | null;
+  };
+};
+
+type PointsByWeekRow = {
+  weekStart: Date | null;
+  _sum: {
+    points: number | null;
+  };
 };
 
 function getDurationMinutes(item: {
@@ -33,7 +48,7 @@ export async function recalculateSeasonWeekProgress({
   userId,
   weeklyGoal,
 }: Params) {
-  const linkedActivities = await tx.activitySeason.findMany({
+  const linkedActivitiesRaw = await tx.activitySeason.findMany({
     where: {
       seasonId,
       activity: {
@@ -52,6 +67,8 @@ export async function recalculateSeasonWeekProgress({
       },
     },
   });
+
+  const linkedActivities = linkedActivitiesRaw as LinkedActivityRow[];
 
   const weekMap = new Map<
     string,
@@ -81,25 +98,27 @@ export async function recalculateSeasonWeekProgress({
     }
   }
 
-  const pointsByWeek = await tx.scoreEvent.groupBy({
-  by: ["weekStart"],
-  where: {
-    seasonId,
-    userId,
-    weekStart: {
-      not: null,
+  const pointsByWeekRaw = await tx.scoreEvent.groupBy({
+    by: ["weekStart"],
+    where: {
+      seasonId,
+      userId,
+      weekStart: {
+        not: null,
+      },
     },
-  },
-  _sum: {
-    points: true,
-  },
-});
+    _sum: {
+      points: true,
+    },
+  });
 
-const pointsMap = new Map<string, number>();
-for (const row of pointsByWeek) {
-  if (!row.weekStart) continue;
-  pointsMap.set(getWeekKey(row.weekStart), row._sum.points ?? 0);
-}
+  const pointsByWeek = pointsByWeekRaw as PointsByWeekRow[];
+
+  const pointsMap = new Map<string, number>();
+  for (const row of pointsByWeek) {
+    if (!row.weekStart) continue;
+    pointsMap.set(getWeekKey(row.weekStart), row._sum.points ?? 0);
+  }
 
   const orderedWeeks = Array.from(weekMap.values()).sort(
     (a, b) => a.weekStart.getTime() - b.weekStart.getTime()

@@ -2,16 +2,37 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 
+type ActivityCategoryRow = {
+  id: string;
+  slug: string;
+};
+
+class SeasonCreateHttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function parseDateOnly(value: string) {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 }
 
-function normalizeAllowedActivityCategoryIds(input: unknown) {
+function normalizeAllowedActivityCategoryIds(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
-  return Array.from(
-    new Set(input.filter((value): value is string => typeof value === "string" && value.length > 0))
-  );
+
+  const ids = new Set<string>();
+
+  for (const value of input) {
+    if (typeof value === "string" && value.length > 0) {
+      ids.add(value);
+    }
+  }
+
+  return Array.from(ids);
 }
 
 export async function POST(req: Request) {
@@ -116,7 +137,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const categories = await prisma.activityCategory.findMany({
+    const categoriesRaw = await prisma.activityCategory.findMany({
       where: {
         id: { in: normalizedAllowedActivityCategoryIds },
         isActive: true,
@@ -127,6 +148,8 @@ export async function POST(req: Request) {
       },
     });
 
+    const categories = categoriesRaw as ActivityCategoryRow[];
+
     if (categories.length !== normalizedAllowedActivityCategoryIds.length) {
       return NextResponse.json(
         { error: "One or more activity categories are invalid" },
@@ -134,7 +157,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const season = await prisma.$transaction(async (tx) => {
+    const season = await prisma.$transaction(async (tx: any) => {
+      const allowedActivityTypes: string[] = [];
+      const allowedActivityTypeLinksData: Array<{ activityCategoryId: string }> = [];
+
+      for (const item of categories) {
+        allowedActivityTypes.push(item.slug);
+        allowedActivityTypeLinksData.push({
+          activityCategoryId: item.id,
+        });
+      }
+
       const created = await tx.season.create({
         data: {
           groupId,
@@ -146,11 +179,9 @@ export async function POST(req: Request) {
           startDate: start,
           endDate: end,
           weeklyGoal: normalizedWeeklyGoal,
-          allowedActivityTypes: categories.map((item) => item.slug),
+          allowedActivityTypes,
           allowedActivityTypeLinks: {
-            create: categories.map((item) => ({
-              activityCategoryId: item.id,
-            })),
+            create: allowedActivityTypeLinksData,
           },
         },
       });
@@ -170,6 +201,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ id: season.id }, { status: 201 });
   } catch (err) {
+    if (err instanceof SeasonCreateHttpError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("/api/seasons/create error:", err);
     return NextResponse.json({ error: "Error creating season" }, { status: 500 });
   }

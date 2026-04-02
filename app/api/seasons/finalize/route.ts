@@ -11,10 +11,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as { groupId?: unknown; seasonId?: unknown }));
     const { groupId, seasonId } = body ?? {};
 
-    if (!groupId || !seasonId) {
+    if (
+      !groupId ||
+      typeof groupId !== "string" ||
+      !seasonId ||
+      typeof seasonId !== "string"
+    ) {
       return NextResponse.json(
         { error: "Missing groupId or seasonId" },
         { status: 400 }
@@ -56,7 +61,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Season not found" }, { status: 404 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       return finalizeSeasonScoring({
         tx,
         seasonId,

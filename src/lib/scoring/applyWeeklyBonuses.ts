@@ -1,7 +1,5 @@
-import { Prisma } from "@prisma/client";
-
 type Params = {
-  tx: Prisma.TransactionClient;
+  tx: any;
   seasonId: string;
   userId: string;
   weekStart: Date;
