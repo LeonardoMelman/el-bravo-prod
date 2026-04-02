@@ -21,14 +21,34 @@ type CreateActivityExerciseInput = {
   weightKg?: number | string | null;
 };
 
-type TxClient = Omit<
-  typeof prisma,
-  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
->;
-
 type ExistingExerciseEntry = {
   id: string;
   measureType: "reps" | "duration";
+};
+
+type AllowedActivityTypeLink = {
+  activityCategoryId: string;
+};
+
+type PreviousLinkedActivityEntry = {
+  activity: {
+    startedAt: Date;
+  };
+};
+
+type CandidateSeasonEntry = {
+  id: string;
+  weeklyGoal: number;
+  basePointsPerActivity: number;
+  weeklyStreakBonus: number;
+  perfectWeekBonus: number;
+  allowedActivityTypeLinks: AllowedActivityTypeLink[];
+  maxScoreableMinutesPerActivity: number | null;
+};
+
+type CreatedScoreEventEntry = {
+  seasonId: string;
+  points: number;
 };
 
 class ActivityCreateHttpError extends Error {
@@ -71,9 +91,24 @@ function mapCategorySlugToLegacyType(slug: string): LegacyActivityType {
 }
 
 function normalizeAllowedActivityCategoryIds(
-  links: Array<{ activityCategoryId: string }>
+  links: AllowedActivityTypeLink[]
 ): string[] {
-  return Array.from(new Set(links.map((item) => item.activityCategoryId)));
+  const ids = new Set<string>();
+
+  for (const link of links) {
+    ids.add(link.activityCategoryId);
+  }
+
+  return Array.from(ids);
+}
+
+function parseNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
 }
 
 export async function POST(req: Request) {
@@ -142,20 +177,9 @@ export async function POST(req: Request) {
       }
 
       const sets = Number(item.sets);
-      const reps =
-        item.reps === null || item.reps === undefined || item.reps === ""
-          ? null
-          : Number(item.reps);
-      const durationSeconds =
-        item.durationSeconds === null ||
-        item.durationSeconds === undefined ||
-        item.durationSeconds === ""
-          ? null
-          : Number(item.durationSeconds);
-      const weightKg =
-        item.weightKg === null || item.weightKg === undefined || item.weightKg === ""
-          ? null
-          : Number(item.weightKg);
+      const reps = parseNullableNumber(item.reps);
+      const durationSeconds = parseNullableNumber(item.durationSeconds);
+      const weightKg = parseNullableNumber(item.weightKg);
 
       if (!Number.isFinite(sets) || sets <= 0) {
         return NextResponse.json(
@@ -203,7 +227,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const result = await prisma.$transaction(async (tx: TxClient) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const activityCategory = await tx.activityCategory.findUnique({
         where: { id: activityCategoryId },
         select: {
@@ -226,20 +250,23 @@ export async function POST(req: Request) {
           startedAt: s,
           endedAt: e,
           durationMinutes,
-          notes: notes ?? null,
+          notes: typeof notes === "string" && notes.trim().length > 0 ? notes : null,
           type: normalizedType,
           activityCategoryId: activityCategory.id,
-          routineId: routineId ?? null,
+          routineId:
+            typeof routineId === "string" && routineId.trim().length > 0
+              ? routineId
+              : null,
         },
       });
 
-      const exerciseIds = [
-        ...new Set(
-          normalizedExercises.map((item: CreateActivityExerciseInput) => item.exerciseId)
-        ),
-      ];
+      const exerciseIdsSet = new Set<string>();
+      for (const item of normalizedExercises) {
+        exerciseIdsSet.add(item.exerciseId);
+      }
+      const exerciseIds = Array.from(exerciseIdsSet);
 
-      const existingExercises = await tx.exercise.findMany({
+      const existingExercisesRaw = await tx.exercise.findMany({
         where: {
           id: { in: exerciseIds },
         },
@@ -249,52 +276,53 @@ export async function POST(req: Request) {
         },
       });
 
-      const exerciseById = new Map<string, ExistingExerciseEntry>(
-        existingExercises.map((item) => [item.id, item as ExistingExerciseEntry])
-      );
+      const existingExercises = existingExercisesRaw as ExistingExerciseEntry[];
 
       if (existingExercises.length !== exerciseIds.length) {
         throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
       }
 
+      const exerciseById = new Map<string, ExistingExerciseEntry>();
+      for (const exercise of existingExercises) {
+        exerciseById.set(exercise.id, exercise);
+      }
+
+      const activityExercisesData: Array<{
+        activityId: string;
+        exerciseId: string;
+        sets: number;
+        reps: number | null;
+        durationSeconds: number | null;
+        weightKg: number | null;
+      }> = [];
+
+      for (const item of normalizedExercises) {
+        const exercise = exerciseById.get(item.exerciseId);
+
+        if (!exercise) {
+          throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
+        }
+
+        const reps = parseNullableNumber(item.reps);
+        const durationSeconds = parseNullableNumber(item.durationSeconds);
+        const weightKg = parseNullableNumber(item.weightKg);
+
+        activityExercisesData.push({
+          activityId: activity.id,
+          exerciseId: item.exerciseId,
+          sets: Number(item.sets),
+          reps: exercise.measureType === "reps" ? reps : null,
+          durationSeconds:
+            exercise.measureType === "duration" ? durationSeconds : null,
+          weightKg,
+        });
+      }
+
       await tx.activityExercise.createMany({
-        data: normalizedExercises.map((item: CreateActivityExerciseInput) => {
-          const exercise = exerciseById.get(item.exerciseId);
-
-          if (!exercise) {
-            throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
-          }
-
-          const reps =
-            item.reps === null || item.reps === undefined || item.reps === ""
-              ? null
-              : Number(item.reps);
-
-          const durationSeconds =
-            item.durationSeconds === null ||
-            item.durationSeconds === undefined ||
-            item.durationSeconds === ""
-              ? null
-              : Number(item.durationSeconds);
-
-          return {
-            activityId: activity.id,
-            exerciseId: item.exerciseId,
-            sets: Number(item.sets),
-            reps: exercise.measureType === "reps" ? reps : null,
-            durationSeconds:
-              exercise.measureType === "duration" ? durationSeconds : null,
-            weightKg:
-              item.weightKg === null ||
-              item.weightKg === undefined ||
-              item.weightKg === ""
-                ? null
-                : Number(item.weightKg),
-          };
-        }),
+        data: activityExercisesData,
       });
 
-      const candidateSeasons = await tx.season.findMany({
+      const candidateSeasonsRaw = await tx.season.findMany({
         where: {
           isActive: true,
           startDate: { lte: s },
@@ -321,7 +349,8 @@ export async function POST(req: Request) {
         },
       });
 
-      const createdScoreEvents: Array<{ seasonId: string; points: number }> = [];
+      const candidateSeasons = candidateSeasonsRaw as CandidateSeasonEntry[];
+      const createdScoreEvents: CreatedScoreEventEntry[] = [];
 
       for (const season of candidateSeasons) {
         const allowedCategoryIds = normalizeAllowedActivityCategoryIds(
@@ -335,7 +364,7 @@ export async function POST(req: Request) {
           continue;
         }
 
-        const previousLinkedActivities = await tx.activitySeason.findMany({
+        const previousLinkedActivitiesRaw = await tx.activitySeason.findMany({
           where: {
             seasonId: season.id,
             activity: {
@@ -355,9 +384,13 @@ export async function POST(req: Request) {
           },
         });
 
-        const previousDates = previousLinkedActivities.map(
-          (item: { activity: { startedAt: Date } }) => item.activity.startedAt
-        );
+        const previousLinkedActivities =
+          previousLinkedActivitiesRaw as PreviousLinkedActivityEntry[];
+
+        const previousDates: Date[] = [];
+        for (const entry of previousLinkedActivities) {
+          previousDates.push(entry.activity.startedAt);
+        }
 
         const previousWeekCounts = buildWeekCounts(previousDates);
 
@@ -492,6 +525,9 @@ export async function POST(req: Request) {
     }
 
     console.error("/api/activities/create error:", err);
-    return NextResponse.json({ error: "Error creating activity" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error creating activity" },
+      { status: 500 }
+    );
   }
 }
