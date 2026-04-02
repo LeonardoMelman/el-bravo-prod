@@ -26,6 +26,11 @@ type TxClient = Omit<
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
 >;
 
+type ExistingExerciseEntry = {
+  id: string;
+  measureType: "reps" | "duration";
+};
+
 class ActivityCreateHttpError extends Error {
   status: number;
 
@@ -244,10 +249,8 @@ export async function POST(req: Request) {
         },
       });
 
-      const exerciseById = new Map(
-        existingExercises.map(
-          (item: { id: string; measureType: "reps" | "duration" }) => [item.id, item]
-        )
+      const exerciseById = new Map<string, ExistingExerciseEntry>(
+        existingExercises.map((item) => [item.id, item as ExistingExerciseEntry])
       );
 
       if (existingExercises.length !== exerciseIds.length) {
@@ -256,7 +259,11 @@ export async function POST(req: Request) {
 
       await tx.activityExercise.createMany({
         data: normalizedExercises.map((item: CreateActivityExerciseInput) => {
-          const exercise = exerciseById.get(item.exerciseId)!;
+          const exercise = exerciseById.get(item.exerciseId);
+
+          if (!exercise) {
+            throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
+          }
 
           const reps =
             item.reps === null || item.reps === undefined || item.reps === ""
