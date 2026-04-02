@@ -4,6 +4,30 @@ import { createRoutineSchema } from "@/src/schemas/routine";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { z } from "zod";
 
+type RoutineExerciseMeasureType = "reps" | "duration";
+
+type ParsedRoutineExerciseInput = {
+  exerciseId: string;
+  sets: number | string;
+  reps?: number | string | null;
+  durationSeconds?: number | string | null;
+  weightKg?: number | string | null;
+};
+
+type ExistingExerciseRow = {
+  id: string;
+  measureType: RoutineExerciseMeasureType;
+};
+
+function parseNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -18,21 +42,25 @@ export async function POST(req: Request) {
       );
     }
 
+    const normalizedExercises = exercises as ParsedRoutineExerciseInput[];
+
     const exerciseIds = Array.from(
       new Set(
-        exercises
-          .map((e) => e.exerciseId)
-          .filter((id) => id && id !== "__new")
+        normalizedExercises
+          .map((e: ParsedRoutineExerciseInput) => e.exerciseId)
+          .filter((id: unknown): id is string => typeof id === "string" && id !== "__new")
       )
     );
 
-    const existingExercises =
+    const existingExercisesRaw =
       exerciseIds.length > 0
         ? await prisma.exercise.findMany({
             where: { id: { in: exerciseIds } },
             select: { id: true, measureType: true },
           })
         : [];
+
+    const existingExercises = existingExercisesRaw as ExistingExerciseRow[];
 
     if (existingExercises.length !== exerciseIds.length) {
       return NextResponse.json(
@@ -41,7 +69,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const exerciseById = new Map(existingExercises.map((item) => [item.id, item]));
+    const exerciseById = new Map<string, ExistingExerciseRow>();
+    for (const item of existingExercises) {
+      exerciseById.set(item.id, item);
+    }
 
     const routine = await prisma.routine.create({
       data: {
@@ -50,30 +81,23 @@ export async function POST(req: Request) {
           connect: { id: user.id },
         },
         exercises: {
-          create: exercises.map((e: any) => {
+          create: normalizedExercises.map((e: ParsedRoutineExerciseInput) => {
             const exercise = exerciseById.get(e.exerciseId);
 
-            const reps =
-              e.reps === null || e.reps === undefined || e.reps === ""
-                ? null
-                : Number(e.reps);
+            if (!exercise) {
+              throw new Error("Exercise not found while creating routine");
+            }
 
-            const durationSeconds =
-              e.durationSeconds === null ||
-              e.durationSeconds === undefined ||
-              e.durationSeconds === ""
-                ? null
-                : Number(e.durationSeconds);
+            const reps = parseNullableNumber(e.reps);
+            const durationSeconds = parseNullableNumber(e.durationSeconds);
+            const weightKg = parseNullableNumber(e.weightKg);
 
             return {
               sets: Number(e.sets),
-              reps: exercise?.measureType === "reps" ? reps : null,
+              reps: exercise.measureType === "reps" ? reps : null,
               durationSeconds:
-                exercise?.measureType === "duration" ? durationSeconds : null,
-              weightKg:
-                e.weightKg === null || e.weightKg === undefined || e.weightKg === ""
-                  ? null
-                  : Number(e.weightKg),
+                exercise.measureType === "duration" ? durationSeconds : null,
+              weightKg,
               exercise: {
                 connect: { id: e.exerciseId },
               },
@@ -91,6 +115,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
     console.error(error);
     return NextResponse.json(
       { error: "Internal server error" },

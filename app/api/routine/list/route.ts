@@ -2,6 +2,37 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/src/lib/db";
 import { getCurrentUser } from "@/src/lib/currentUser";
 
+type RoutineExerciseMeasureType = "reps" | "duration";
+
+type RoutineListRow = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  exercises: Array<{
+    id: string;
+    sets: number;
+    reps: number | null;
+    durationSeconds: number | null;
+    weightKg: number | null;
+    exercise: {
+      id: string;
+      name: string;
+      measureType: RoutineExerciseMeasureType;
+      muscles: Array<{
+        exerciseId: string;
+        muscleId: string;
+        percentage: number;
+        muscle: {
+          id: string;
+          name: string;
+          slug: string;
+          groupKey: string;
+        };
+      }>;
+    };
+  }>;
+};
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -10,7 +41,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const routines = await prisma.routine.findMany({
+    const routinesRaw = await prisma.routine.findMany({
       where: {
         userId: user.id,
       },
@@ -55,7 +86,9 @@ export async function GET() {
       },
     });
 
-    const formatted = routines.map((routine) => ({
+    const routines = routinesRaw as RoutineListRow[];
+
+    const formatted = routines.map((routine: RoutineListRow) => ({
       id: routine.id,
       name: routine.name,
       createdAt: routine.createdAt,

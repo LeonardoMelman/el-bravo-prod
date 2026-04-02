@@ -2,6 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../src/lib/db";
 import { getCurrentUser } from "@/src/lib/currentUser";
 
+type RoutineExerciseMeasureType = "reps" | "duration";
+
+type RoutineExerciseInput = {
+  exerciseId: string;
+  sets: number | string;
+  reps?: number | string | null;
+  durationSeconds?: number | string | null;
+  weightKg?: number | string | null;
+};
+
+type ExistingExerciseRow = {
+  id: string;
+  measureType: RoutineExerciseMeasureType;
+};
+
+function parseNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
 // ==========================
 // GET /api/routine/[id]
 // ==========================
@@ -48,15 +72,27 @@ export async function GET(
     return NextResponse.json({
       id: routine.id,
       name: routine.name,
-      exercises: routine.exercises.map((re) => ({
-        exerciseId: re.exerciseId,
-        name: re.exercise.name,
-        measureType: re.exercise.measureType,
-        sets: re.sets,
-        reps: re.reps ?? null,
-        durationSeconds: re.durationSeconds ?? null,
-        weightKg: re.weightKg ?? null,
-      })),
+      exercises: routine.exercises.map(
+        (re: {
+          exerciseId: string;
+          sets: number;
+          reps: number | null;
+          durationSeconds: number | null;
+          weightKg: number | null;
+          exercise: {
+            name: string;
+            measureType: RoutineExerciseMeasureType;
+          };
+        }) => ({
+          exerciseId: re.exerciseId,
+          name: re.exercise.name,
+          measureType: re.exercise.measureType,
+          sets: re.sets,
+          reps: re.reps ?? null,
+          durationSeconds: re.durationSeconds ?? null,
+          weightKg: re.weightKg ?? null,
+        })
+      ),
     });
   } catch (error) {
     console.error(error);
@@ -83,7 +119,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, exercises } = body;
+    const { name, exercises } = body ?? {};
 
     if (!id || !name || !Array.isArray(exercises)) {
       return NextResponse.json(
@@ -109,21 +145,28 @@ export async function PUT(
       );
     }
 
+    const normalizedExercises = exercises as RoutineExerciseInput[];
+
     const exerciseIds = Array.from(
       new Set(
-        exercises
-          .map((e: any) => e.exerciseId)
-          .filter((exerciseId: unknown) => typeof exerciseId === "string" && exerciseId)
+        normalizedExercises
+          .map((e: RoutineExerciseInput) => e.exerciseId)
+          .filter(
+            (exerciseId: unknown): exerciseId is string =>
+              typeof exerciseId === "string" && exerciseId.length > 0
+          )
       )
     );
 
-    const existingExercises =
+    const existingExercisesRaw =
       exerciseIds.length > 0
         ? await prisma.exercise.findMany({
             where: { id: { in: exerciseIds } },
             select: { id: true, measureType: true },
           })
         : [];
+
+    const existingExercises = existingExercisesRaw as ExistingExerciseRow[];
 
     if (existingExercises.length !== exerciseIds.length) {
       return NextResponse.json(
@@ -132,7 +175,10 @@ export async function PUT(
       );
     }
 
-    const exerciseById = new Map(existingExercises.map((item) => [item.id, item]));
+    const exerciseById = new Map<string, ExistingExerciseRow>();
+    for (const item of existingExercises) {
+      exerciseById.set(item.id, item);
+    }
 
     await prisma.routineExercise.deleteMany({
       where: { routineId: id },
@@ -143,32 +189,23 @@ export async function PUT(
       data: {
         name,
         exercises: {
-          create: exercises.map((ex: any) => {
-            const exercise = exerciseById.get(ex.exerciseId)!;
+          create: normalizedExercises.map((ex: RoutineExerciseInput) => {
+            const exercise = exerciseById.get(ex.exerciseId);
 
-            const reps =
-              ex.reps === null || ex.reps === undefined || ex.reps === ""
-                ? null
-                : Number(ex.reps);
+            if (!exercise) {
+              throw new Error("Exercise not found while updating routine");
+            }
 
-            const durationSeconds =
-              ex.durationSeconds === null ||
-              ex.durationSeconds === undefined ||
-              ex.durationSeconds === ""
-                ? null
-                : Number(ex.durationSeconds);
+            const reps = parseNullableNumber(ex.reps);
+            const durationSeconds = parseNullableNumber(ex.durationSeconds);
+            const weightKg = parseNullableNumber(ex.weightKg);
 
             return {
               sets: Number(ex.sets),
               reps: exercise.measureType === "reps" ? reps : null,
               durationSeconds:
                 exercise.measureType === "duration" ? durationSeconds : null,
-              weightKg:
-                ex.weightKg === null ||
-                ex.weightKg === undefined ||
-                ex.weightKg === ""
-                  ? null
-                  : Number(ex.weightKg),
+              weightKg,
               exercise: {
                 connect: { id: ex.exerciseId },
               },
