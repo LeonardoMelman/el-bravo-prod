@@ -21,6 +21,11 @@ type CreateActivityExerciseInput = {
   weightKg?: number | string | null;
 };
 
+type TxClient = Omit<
+  typeof prisma,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+>;
+
 class ActivityCreateHttpError extends Error {
   status: number;
 
@@ -193,7 +198,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: TxClient) => {
       const activityCategory = await tx.activityCategory.findUnique({
         where: { id: activityCategoryId },
         select: {
