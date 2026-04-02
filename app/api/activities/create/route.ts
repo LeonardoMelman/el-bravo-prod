@@ -13,6 +13,23 @@ import { applyWeeklyBonuses } from "@/src/lib/scoring/applyWeeklyBonuses";
 
 type LegacyActivityType = "gym" | "run" | "sport" | "mobility" | "other";
 
+type CreateActivityExerciseInput = {
+  exerciseId: string;
+  sets: number | string;
+  reps?: number | string | null;
+  durationSeconds?: number | string | null;
+  weightKg?: number | string | null;
+};
+
+class ActivityCreateHttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function mapCategorySlugToLegacyType(slug: string): LegacyActivityType {
   switch (slug) {
     case "strength":
@@ -104,7 +121,9 @@ export async function POST(req: Request) {
       );
     }
 
-    for (const item of exercises) {
+    const normalizedExercises = exercises as CreateActivityExerciseInput[];
+
+    for (const item of normalizedExercises) {
       if (!item?.exerciseId || typeof item.exerciseId !== "string") {
         return NextResponse.json(
           { error: "Invalid exerciseId" },
@@ -185,10 +204,7 @@ export async function POST(req: Request) {
       });
 
       if (!activityCategory) {
-        return NextResponse.json(
-          { error: "Invalid activity category" },
-          { status: 400 }
-        );
+        throw new ActivityCreateHttpError(400, "Invalid activity category");
       }
 
       const normalizedType = mapCategorySlugToLegacyType(activityCategory.slug);
@@ -207,7 +223,11 @@ export async function POST(req: Request) {
         },
       });
 
-      const exerciseIds = [...new Set(exercises.map((item: any) => item.exerciseId))];
+      const exerciseIds = [
+        ...new Set(
+          normalizedExercises.map((item: CreateActivityExerciseInput) => item.exerciseId)
+        ),
+      ];
 
       const existingExercises = await tx.exercise.findMany({
         where: {
@@ -219,17 +239,16 @@ export async function POST(req: Request) {
         },
       });
 
-      const exerciseById = new Map(existingExercises.map((item) => [item.id, item]));
+      const exerciseById = new Map(
+        existingExercises.map((item) => [item.id, item])
+      );
 
       if (existingExercises.length !== exerciseIds.length) {
-        return NextResponse.json(
-          { error: "One or more exercises do not exist" },
-          { status: 400 }
-        );
+        throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
       }
 
       await tx.activityExercise.createMany({
-        data: exercises.map((item: any) => {
+        data: normalizedExercises.map((item: CreateActivityExerciseInput) => {
           const exercise = exerciseById.get(item.exerciseId)!;
 
           const reps =
@@ -323,7 +342,7 @@ export async function POST(req: Request) {
         });
 
         const previousDates = previousLinkedActivities.map(
-          (item) => item.activity.startedAt
+          (item: { activity: { startedAt: Date } }) => item.activity.startedAt
         );
 
         const previousWeekCounts = buildWeekCounts(previousDates);
@@ -452,12 +471,12 @@ export async function POST(req: Request) {
       };
     });
 
-    if (result instanceof NextResponse) {
-      return result;
-    }
-
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
+    if (err instanceof ActivityCreateHttpError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+
     console.error("/api/activities/create error:", err);
     return NextResponse.json({ error: "Error creating activity" }, { status: 500 });
   }
