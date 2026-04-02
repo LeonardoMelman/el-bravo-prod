@@ -87,11 +87,10 @@ export async function POST(req: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { errors: error.errors },
+        { errors: error.issues },
         { status: 400 }
       );
     }
-
     console.error(error);
     return NextResponse.json(
       { error: "Internal server error" },

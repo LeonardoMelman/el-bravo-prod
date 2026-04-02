@@ -367,42 +367,44 @@ export default function RoutineForm({
   }
 
   const routineShare = useMemo(() => {
-    const normalizedExercises = exercises
-      .map((routineExercise, index) => {
-        const exercise = availableExercises.find(
-          (item) => item.id === routineExercise.exerciseId
-        );
+  type RoutineShareInput = Parameters<typeof calculateRoutineMuscleShare>[0][number];
 
-        if (!exercise) {
-          return null;
-        }
+  const normalizedExercises: RoutineShareInput[] = exercises
+    .map((routineExercise, index): RoutineShareInput | null => {
+      const exercise = availableExercises.find(
+        (item) => item.id === routineExercise.exerciseId
+      );
 
-        return {
-          id: `${exercise.id}-${index}`,
-          sets: routineExercise.sets,
-          reps:
-            routineExercise.measureType === "reps"
-              ? routineExercise.reps ?? 0
-              : 0,
-          weightKg: routineExercise.weightKg ?? null,
-          exercise: {
-            id: exercise.id,
-            name: exercise.name,
-            muscles: (exercise.muscles ?? []).map((m) => ({
-              percentage: m.percentage,
-              muscle: {
-                id: m.muscle.id,
-                name: m.muscle.name,
-                slug: m.muscle.slug ?? m.muscle.id,
-                groupKey: m.muscle.groupKey ?? "other",
-              },
-            })),
-          },
-        };
-      })
-      .filter(Boolean) as Parameters<typeof calculateRoutineMuscleShare>[0];
+      if (!exercise) {
+        return null;
+      }
 
-    return calculateRoutineMuscleShare(normalizedExercises);
+      return {
+        id: `${exercise.id}-${index}`,
+        sets: routineExercise.sets,
+        reps:
+          routineExercise.measureType === "reps"
+            ? routineExercise.reps ?? 0
+            : 0,
+        exercise: {
+          id: exercise.id,
+          name: exercise.name,
+          muscles: (exercise.muscles ?? []).map((m, muscleIndex) => ({
+            id: `${exercise.id}-${m.muscle.id}-${muscleIndex}`,
+            percentage: m.percentage,
+            muscle: {
+              id: m.muscle.id,
+              name: m.muscle.name,
+              slug: m.muscle.slug ?? m.muscle.id,
+              groupKey: m.muscle.groupKey ?? "other",
+            },
+          })),
+        },
+      };
+    })
+    .filter((item): item is RoutineShareInput => item !== null);
+
+  return calculateRoutineMuscleShare(normalizedExercises);
   }, [exercises, availableExercises]);
 
   async function handleSubmit(e: React.FormEvent) {

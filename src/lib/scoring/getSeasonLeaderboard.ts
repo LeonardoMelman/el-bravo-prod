@@ -3,6 +3,18 @@ import { prisma } from "@/src/lib/db";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+
+  export type SeasonLeaderboardEntry = {
+    userId: string;
+    name: string | null;
+    email: string | null;
+    photoUrl: string | null;
+    points: number;
+    rank: number;
+    activeWeeks?: number;
+    perfectWeeks?: number;
+  };
+
 export async function getSeasonLeaderboard(
   seasonId: string,
   db: DbClient = prisma

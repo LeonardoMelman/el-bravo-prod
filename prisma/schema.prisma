@@ -80,6 +80,8 @@ model User {
   scoreEvents        ScoreEvent[]
   seasonWeekProgress SeasonWeekProgress[]
   awardsEarned       AwardEarned[]
+
+  @@map("user")
 }
 
 model Group {
@@ -100,6 +102,7 @@ model Group {
   seasons Season[]
 
   @@index([createdBy])
+  @@map("group")
 }
 
 model GroupMember {
@@ -125,6 +128,7 @@ model GroupMember {
   @@unique([groupId, userId])
   @@index([userId])
   @@index([groupId, status])
+  @@map("groupmember")
 }
 
 model Season {
@@ -171,6 +175,7 @@ model Season {
   @@index([groupId])
   @@index([groupId, isActive])
   @@index([startDate, endDate])
+  @@map("season")
 }
 
 model SeasonMember {
@@ -186,6 +191,7 @@ model SeasonMember {
 
   @@unique([seasonId, userId])
   @@index([userId])
+  @@map("seasonmember")
 }
 
 model Exercise {
@@ -199,6 +205,7 @@ model Exercise {
   activities ActivityExercise[]
 
   @@unique([name])
+  @@map("exercise")
 }
 
 model Muscle {
@@ -210,6 +217,7 @@ model Muscle {
   exercises ExerciseMuscle[]
 
   @@unique([name])
+  @@map("muscle")
 }
 
 model ExerciseMuscle {
@@ -222,6 +230,7 @@ model ExerciseMuscle {
 
   @@id([exerciseId, muscleId])
   @@index([muscleId])
+  @@map("exercisemuscle")
 }
 
 model Activity {
@@ -261,6 +270,7 @@ model Activity {
   @@index([type])
   @@index([routineId])
   @@index([activityCategoryId])
+  @@map("activity")
 }
 
 model ActivityMedia {
@@ -279,6 +289,7 @@ model ActivityMedia {
   activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 
   @@index([activityId])
+  @@map("activitymedia")
 }
 
 model ActivitySeason {
@@ -292,6 +303,7 @@ model ActivitySeason {
 
   @@unique([activityId, seasonId])
   @@index([seasonId])
+  @@map("activityseason")
 }
 
 model Routine {
@@ -308,6 +320,7 @@ model Routine {
   updatedAt DateTime? @updatedAt
 
   @@index([userId])
+  @@map("routine")
 }
 
 model RoutineExercise {
@@ -326,6 +339,7 @@ model RoutineExercise {
 
   @@index([routineId])
   @@index([exerciseId])
+  @@map("routineexercise")
 }
 
 model ActivityExercise {
@@ -344,6 +358,7 @@ model ActivityExercise {
 
   @@index([activityId])
   @@index([exerciseId])
+  @@map("activityexercise")
 }
 
 model ActivityCategory {
@@ -359,6 +374,7 @@ model ActivityCategory {
   seasons    SeasonAllowedActivityType[]
 
   @@index([isActive, sortOrder])
+  @@map("activitycategory")
 }
 
 model SeasonAllowedActivityType {
@@ -372,6 +388,7 @@ model SeasonAllowedActivityType {
 
   @@unique([seasonId, activityCategoryId])
   @@index([activityCategoryId])
+  @@map("seasonallowedactivitytype")
 }
 
 model ScoreEvent {
@@ -394,6 +411,7 @@ model ScoreEvent {
   @@index([userId])
   @@index([activityId])
   @@index([seasonId, weekStart])
+  @@map("scoreevent")
 }
 
 model SeasonWeekProgress {
@@ -419,6 +437,7 @@ model SeasonWeekProgress {
   @@unique([seasonId, userId, weekStart])
   @@index([seasonId, weekStart])
   @@index([userId, weekStart])
+  @@map("seasonweekprogress")
 }
 
 model AwardDefinition {
@@ -438,6 +457,8 @@ model AwardDefinition {
   createdAt DateTime @default(now())
 
   earned AwardEarned[]
+
+  @@map("awarddefinition")
 }
 
 model AwardEarned {
@@ -458,4 +479,5 @@ model AwardEarned {
   @@index([userId])
   @@index([seasonId, userId])
   @@index([activityId])
+  @@map("awardearned")
 }

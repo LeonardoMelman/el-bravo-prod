@@ -17,8 +17,8 @@ type SeasonLeaderboardEntry = {
   photoUrl: string | null;
   points: number;
   rank: number;
-  activeWeeks: number;
-  perfectWeeks: number;
+  activeWeeks?: number;
+  perfectWeeks?: number;
 };
 
 type UserSeasonStanding = {

@@ -32,21 +32,25 @@ type SeasonCard = {
   id: string;
   name: string;
   description: string | null;
-  startDate: string | Date;
-  endDate: string | Date;
+  startDate: Date | string;
+  endDate: Date | string;
   weeklyGoal: number;
-  allowedActivityTypes: string[];
-  joined: boolean;
-  isActive: boolean;
-  isUpcoming: boolean;
-  isPast: boolean;
-  members: Array<{
+  allowedActivityTypes: Array<{
     id: string;
+    slug: string;
+    name: string;
+  }>;
+  members: Array<{
+    id?: string;
     userId: string;
     name: string | null;
     email: string | null;
     photoUrl: string | null;
   }>;
+  joined: boolean;
+  isActive: boolean;
+  isUpcoming: boolean;
+  isPast: boolean;
 };
 
 type SeasonLeaderboardEntry = {
@@ -56,8 +60,8 @@ type SeasonLeaderboardEntry = {
   photoUrl: string | null;
   points: number;
   rank: number;
-  activeWeeks: number;
-  perfectWeeks: number;
+  activeWeeks?: number;
+  perfectWeeks?: number;
 };
 
 type UserSeasonStanding = {
@@ -666,12 +670,12 @@ export default function GroupPageClient({
                           Objetivo semanal: {season.weeklyGoal}
                         </span>
 
-                        {season.allowedActivityTypes.map((type) => (
+                        {season.allowedActivityTypes.map((activityType) => (
                           <span
-                            key={type}
+                            key={activityType.id}
                             className="rounded-full bg-slate-800 px-3 py-1 text-slate-200"
                           >
-                            {getActivityTypeLabel(type)}
+                            {activityType.name}
                           </span>
                         ))}
                       </div>
