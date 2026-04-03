@@ -429,7 +429,7 @@ export default function CreateActivityForm() {
   }
 
   return (
-    <div className="rounded-2xl bg-slate-900/60 p-6">
+    <div className="rounded-2xl bg-slate-900/60 p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Cargar actividad</h1>
         <p className="mt-2 text-sm text-slate-400">
@@ -537,21 +537,21 @@ export default function CreateActivityForm() {
         </div>
 
         <div className="rounded-xl bg-slate-800 p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-white">Ejercicios</h2>
               <p className="text-sm text-slate-400">
                 Agregá ejercicios, series y reps o tiempo según corresponda.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
               {hasSelectedRoutine ? (
                 <button
                   type="button"
                   onClick={handleUpdateRoutine}
                   disabled={updatingRoutine || saving || loadingData}
-                  className="rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {updatingRoutine ? "Actualizando..." : "Actualizar rutina"}
                 </button>
@@ -560,7 +560,7 @@ export default function CreateActivityForm() {
               <button
                 type="button"
                 onClick={addExercise}
-                className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-500"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-slate-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-slate-500"
               >
                 + Agregar ejercicio
               </button>
@@ -685,7 +685,7 @@ export default function CreateActivityForm() {
                       <button
                         type="button"
                         onClick={() => removeExercise(index)}
-                        className="rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500"
+                        className="inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500 md:w-auto"
                       >
                         Quitar
                       </button>
@@ -703,11 +703,11 @@ export default function CreateActivityForm() {
           </div>
         ) : null}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="submit"
             disabled={saving || loadingData}
-            className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {saving ? "Guardando..." : "Guardar actividad"}
           </button>
@@ -715,7 +715,7 @@ export default function CreateActivityForm() {
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="rounded-lg bg-slate-700 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-600"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-slate-700 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-slate-600 sm:w-auto"
           >
             Cancelar
           </button>

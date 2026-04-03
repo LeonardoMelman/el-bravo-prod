@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function JoinGroupModal() {
+type JoinGroupModalProps = {
+  buttonClassName?: string;
+};
+
+export default function JoinGroupModal({
+  buttonClassName,
+}: JoinGroupModalProps) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +57,14 @@ export default function JoinGroupModal() {
   }
 
   return (
-    <div className="inline-block">
+    <div className="w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center rounded-md bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500"
+        className={
+          buttonClassName ??
+          "inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-slate-500 sm:w-auto"
+        }
       >
         Unirte a grupo
       </button>
@@ -95,7 +104,7 @@ export default function JoinGroupModal() {
               )}
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={closeModal}

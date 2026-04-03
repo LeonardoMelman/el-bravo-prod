@@ -367,44 +367,44 @@ export default function RoutineForm({
   }
 
   const routineShare = useMemo(() => {
-  type RoutineShareInput = Parameters<typeof calculateRoutineMuscleShare>[0][number];
+    type RoutineShareInput = Parameters<typeof calculateRoutineMuscleShare>[0][number];
 
-  const normalizedExercises: RoutineShareInput[] = exercises
-    .map((routineExercise, index): RoutineShareInput | null => {
-      const exercise = availableExercises.find(
-        (item) => item.id === routineExercise.exerciseId
-      );
+    const normalizedExercises: RoutineShareInput[] = exercises
+      .map((routineExercise, index): RoutineShareInput | null => {
+        const exercise = availableExercises.find(
+          (item) => item.id === routineExercise.exerciseId
+        );
 
-      if (!exercise) {
-        return null;
-      }
+        if (!exercise) {
+          return null;
+        }
 
-      return {
-        id: `${exercise.id}-${index}`,
-        sets: routineExercise.sets,
-        reps:
-          routineExercise.measureType === "reps"
-            ? routineExercise.reps ?? 0
-            : 0,
-        exercise: {
-          id: exercise.id,
-          name: exercise.name,
-          muscles: (exercise.muscles ?? []).map((m, muscleIndex) => ({
-            id: `${exercise.id}-${m.muscle.id}-${muscleIndex}`,
-            percentage: m.percentage,
-            muscle: {
-              id: m.muscle.id,
-              name: m.muscle.name,
-              slug: m.muscle.slug ?? m.muscle.id,
-              groupKey: m.muscle.groupKey ?? "other",
-            },
-          })),
-        },
-      };
-    })
-    .filter((item): item is RoutineShareInput => item !== null);
+        return {
+          id: `${exercise.id}-${index}`,
+          sets: routineExercise.sets,
+          reps:
+            routineExercise.measureType === "reps"
+              ? routineExercise.reps ?? 0
+              : 0,
+          exercise: {
+            id: exercise.id,
+            name: exercise.name,
+            muscles: (exercise.muscles ?? []).map((m, muscleIndex) => ({
+              id: `${exercise.id}-${m.muscle.id}-${muscleIndex}`,
+              percentage: m.percentage,
+              muscle: {
+                id: m.muscle.id,
+                name: m.muscle.name,
+                slug: m.muscle.slug ?? m.muscle.id,
+                groupKey: m.muscle.groupKey ?? "other",
+              },
+            })),
+          },
+        };
+      })
+      .filter((item): item is RoutineShareInput => item !== null);
 
-  return calculateRoutineMuscleShare(normalizedExercises);
+    return calculateRoutineMuscleShare(normalizedExercises);
   }, [exercises, availableExercises]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -585,19 +585,19 @@ export default function RoutineForm({
   }
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4">
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex items-center rounded-md bg-slate-600 px-4 py-2 text-sm font-medium hover:bg-slate-500"
+            className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-sm font-medium hover:bg-slate-500 sm:w-auto sm:py-2"
           >
             ← Volver atrás
           </button>
         </div>
 
-        <div className="rounded-2xl bg-slate-800 p-6 shadow-lg">
+        <div className="rounded-2xl bg-slate-800 p-4 shadow-lg sm:p-6">
           <div className="mb-6">
             <h1 className="text-3xl font-bold">
               {isEdit ? "Editar rutina" : "Crear rutina"}
@@ -608,7 +608,7 @@ export default function RoutineForm({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="rounded-2xl bg-slate-900/70 p-5">
+            <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
               <label className="mb-2 block text-sm font-medium text-slate-200">
                 Nombre de la rutina
               </label>
@@ -621,7 +621,7 @@ export default function RoutineForm({
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-900/70 p-5">
+              <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
                 <h3 className="mb-3 text-lg font-semibold">Grupos principales</h3>
 
                 {routineShare.groups.length === 0 ? (
@@ -642,7 +642,7 @@ export default function RoutineForm({
                 )}
               </div>
 
-              <div className="rounded-2xl bg-slate-900/70 p-5">
+              <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
                 <h3 className="mb-3 text-lg font-semibold">Músculos trabajados</h3>
 
                 {routineShare.muscles.length === 0 ? (
@@ -670,9 +670,9 @@ export default function RoutineForm({
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-900/70 p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
+            <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
+              <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-semibold">Ejercicios</h2>
                   <p className="mt-1 text-sm text-slate-400">
                     Agregá ejercicios, series y reps o tiempo según corresponda.
@@ -682,7 +682,7 @@ export default function RoutineForm({
                 <button
                   type="button"
                   onClick={addExercise}
-                  className="rounded-md bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+                  className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-medium text-white hover:bg-slate-500 sm:w-auto sm:px-4 sm:py-2"
                 >
                   + Agregar ejercicio
                 </button>
@@ -815,7 +815,7 @@ export default function RoutineForm({
                                 />
 
                                 <div className="space-y-3 rounded-xl bg-slate-900 p-3">
-                                  <div className="flex items-center justify-between gap-3">
+                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                       <div className="text-sm font-medium text-slate-200">
                                         Músculos trabajados
@@ -829,7 +829,7 @@ export default function RoutineForm({
                                       type="button"
                                       onClick={() => addNewExerciseMuscle(index)}
                                       disabled={muscleTotal >= 100}
-                                      className="rounded-md bg-slate-600 px-3 py-1 text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+                                      className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-3 py-2 text-center text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50 sm:w-auto"
                                     >
                                       + Agregar músculo
                                     </button>
@@ -1020,11 +1020,11 @@ export default function RoutineForm({
               </div>
             ) : null}
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-6 py-2 font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-6 py-3 text-center font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:opacity-60 sm:w-auto sm:py-2"
               >
                 {loading ? "Guardando..." : "Guardar rutina"}
               </button>
@@ -1032,7 +1032,7 @@ export default function RoutineForm({
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="rounded-md bg-slate-600 px-4 py-2 font-medium hover:bg-slate-500"
+                className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center font-medium hover:bg-slate-500 sm:w-auto sm:py-2"
               >
                 Cancelar
               </button>

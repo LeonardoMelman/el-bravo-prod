@@ -15,26 +15,28 @@ export default async function EditProfilePage() {
   if (!dbUser) redirect("/dashboard");
 
   const weeklyGoal =
-  (dbUser as typeof dbUser & { weeklyGoal?: number | null }).weeklyGoal ?? 3;
+    (dbUser as typeof dbUser & { weeklyGoal?: number | null }).weeklyGoal ?? 3;
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <a
             href="/profile"
-            className="inline-flex items-center rounded-md bg-slate-600 px-4 py-2 text-sm font-medium hover:bg-slate-500"
+            className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-medium hover:bg-slate-500 sm:w-auto sm:py-2"
           >
             ← Volver al perfil
           </a>
 
-          <LogoutButton />
+          <div className="w-full sm:w-auto">
+            <LogoutButton className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-slate-500 sm:w-auto sm:py-2" />
+          </div>
         </div>
 
-        <section className="rounded-2xl bg-slate-800 p-6 shadow-lg">
-          <div className="mb-6 rounded-2xl bg-slate-900/60 p-5">
+        <section className="rounded-2xl bg-slate-800 p-4 shadow-lg sm:p-6">
+          <div className="mb-6 rounded-2xl bg-slate-900/60 p-4 sm:p-5">
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-              <div className="flex items-center gap-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                 <div className="h-24 w-24 overflow-hidden rounded-3xl bg-slate-700">
                   {dbUser.photoUrl ? (
                     <img
@@ -49,15 +51,19 @@ export default async function EditProfilePage() {
                   )}
                 </div>
 
-                <div>
-                  <h1 className="text-3xl font-bold leading-tight">Editar perfil</h1>
+                <div className="min-w-0">
+                  <h1 className="break-words text-3xl font-bold leading-tight sm:text-4xl">
+                    Editar perfil
+                  </h1>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:min-w-[320px]">
                 <div className="rounded-xl bg-slate-700 p-4">
                   <div className="text-sm text-slate-300">Email actual</div>
-                  <div className="mt-1 font-semibold text-white">{dbUser.email}</div>
+                  <div className="mt-1 break-all font-semibold text-white">
+                    {dbUser.email}
+                  </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-700 p-4">
@@ -71,7 +77,7 @@ export default async function EditProfilePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.3fr_360px]">
-            <div className="rounded-2xl bg-slate-900/70 p-5">
+            <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
               <div className="mb-4">
                 <h2 className="text-xl font-semibold">Datos del perfil</h2>
               </div>
@@ -88,7 +94,7 @@ export default async function EditProfilePage() {
             </div>
 
             <aside className="space-y-4">
-              <div className="rounded-2xl bg-slate-900/70 p-5">
+              <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
                   Vista previa
                 </h3>
@@ -109,11 +115,13 @@ export default async function EditProfilePage() {
                       )}
                     </div>
 
-                    <div>
-                      <div className="text-lg font-semibold text-white">
+                    <div className="min-w-0">
+                      <div className="break-words text-lg font-semibold text-white">
                         {dbUser.name ?? "Sin nombre"}
                       </div>
-                      <div className="text-sm text-slate-400">{dbUser.email}</div>
+                      <div className="break-all text-sm text-slate-400">
+                        {dbUser.email}
+                      </div>
                     </div>
                   </div>
 

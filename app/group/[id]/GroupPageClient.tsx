@@ -244,50 +244,50 @@ export default function GroupPageClient({
   }
 
   async function finalizeSeason(seasonId: string) {
-  const confirmed = window.confirm("¿Finalizar esta temporada?");
-  if (!confirmed) return;
+    const confirmed = window.confirm("¿Finalizar esta temporada?");
+    if (!confirmed) return;
 
-  setLoadingAction(`finalize-${seasonId}`);
+    setLoadingAction(`finalize-${seasonId}`);
 
-  try {
-    const res = await fetch("/api/seasons/finalize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groupId: group.id, seasonId }),
-    });
+    try {
+      const res = await fetch("/api/seasons/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId: group.id, seasonId }),
+      });
 
-    const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      alert(data?.error || "No se pudo finalizar la temporada.");
-      return;
+      if (!res.ok) {
+        alert(data?.error || "No se pudo finalizar la temporada.");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      alert("Error de red al finalizar la temporada.");
+    } finally {
+      setLoadingAction(null);
     }
-
-    router.refresh();
-  } catch {
-    alert("Error de red al finalizar la temporada.");
-  } finally {
-    setLoadingAction(null);
   }
-}
 
   return (
     <>
-      <main className="min-h-screen bg-[#08142d] p-6 text-white">
+      <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
         <div className="mx-auto max-w-7xl space-y-4">
           <div className="flex items-center justify-between gap-3">
             <a
               href="/home"
-              className="inline-flex items-center rounded-md bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+              className="inline-flex items-center justify-center rounded-md bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
             >
               ← Volver
             </a>
           </div>
 
-          <div className="rounded-[28px] border border-slate-700/70 bg-slate-800/90 p-6 shadow-2xl">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="flex min-w-0 flex-1 items-start gap-4">
-                <div className="h-20 w-20 overflow-hidden rounded-xl bg-slate-700">
+          <div className="rounded-[22px] border border-slate-700/70 bg-slate-800/90 p-4 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-700 sm:h-20 sm:w-20">
                   {group.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -296,17 +296,21 @@ export default function GroupPageClient({
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-white">
+                    <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-white sm:text-3xl">
                       {getInitial(group.name)}
                     </div>
                   )}
                 </div>
 
                 <div className="min-w-0">
-                  <h1 className="truncate text-4xl font-bold text-white">{group.name}</h1>
+                  <h1 className="break-words text-3xl font-bold leading-tight text-white sm:text-4xl">
+                    {group.name}
+                  </h1>
 
                   {group.description ? (
-                    <p className="mt-2 text-sm text-slate-400">{group.description}</p>
+                    <p className="mt-2 break-words text-sm text-slate-400">
+                      {group.description}
+                    </p>
                   ) : null}
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -334,15 +338,17 @@ export default function GroupPageClient({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start">
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
                 {isAdmin ? (
-                  <InviteGroupButton setPopupInviteOpen={setInvitePopupOpen} />
+                  <div className="w-full sm:w-auto [&>button]:w-full [&>button]:justify-center sm:[&>button]:w-auto">
+                    <InviteGroupButton setPopupInviteOpen={setInvitePopupOpen} />
+                  </div>
                 ) : null}
 
                 <button
                   type="button"
                   onClick={() => setSettingsPopupOpen(true)}
-                  className="inline-flex items-center rounded-md bg-slate-600 px-3 py-2 text-sm font-medium text-white hover:bg-slate-500"
+                  className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-3 py-2 text-sm font-medium text-white hover:bg-slate-500 sm:w-auto"
                   aria-label="Configuración del grupo"
                 >
                   ⚙️
@@ -371,8 +377,8 @@ export default function GroupPageClient({
                 <>
                   <div className="rounded-2xl bg-[linear-gradient(to_right,#49b6a4,#84d27f,#b6df64)] p-4 text-slate-900">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="text-2xl font-bold">{activeSeason.name}</div>
-                      <div className="text-lg font-semibold text-slate-900/70">
+                      <div className="break-words text-2xl font-bold">{activeSeason.name}</div>
+                      <div className="text-sm font-semibold text-slate-900/70 sm:text-base">
                         {formatDate(activeSeason.startDate)} - {formatDate(activeSeason.endDate)}
                       </div>
                     </div>
@@ -424,7 +430,7 @@ export default function GroupPageClient({
                               className="rounded-2xl border border-slate-700 bg-slate-800/80 p-3"
                             >
                               <div className="flex items-start gap-3">
-                                <div className="h-20 w-20 overflow-hidden rounded-xl bg-slate-700">
+                                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-700">
                                   {activity.mediaUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img
@@ -441,8 +447,8 @@ export default function GroupPageClient({
 
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <div className="font-semibold text-white">
+                                    <div className="min-w-0">
+                                      <div className="break-words font-semibold text-white">
                                         {activity.user?.name ?? activity.user?.email ?? "Usuario"}
                                       </div>
                                       <div className="mt-1 text-xs text-slate-400">
@@ -451,7 +457,7 @@ export default function GroupPageClient({
                                       </div>
                                     </div>
 
-                                    <div className="text-right text-xs text-slate-400">
+                                    <div className="shrink-0 text-right text-xs text-slate-400">
                                       {activity.durationMinutes ?? 0} min
                                     </div>
                                   </div>
@@ -460,11 +466,11 @@ export default function GroupPageClient({
                                     {activity.muscles && activity.muscles.length > 0 ? (
                                       activity.muscles.map((muscle: any) => (
                                         <div key={muscle.name}>
-                                          <div className="mb-1 flex items-center justify-between text-xs">
+                                          <div className="mb-1 flex items-center justify-between gap-3 text-xs">
                                             <span className="font-medium text-white">
                                               {muscle.name}
                                             </span>
-                                            <span className="text-slate-300">
+                                            <span className="shrink-0 text-slate-300">
                                               {muscle.percentage}%
                                             </span>
                                           </div>
@@ -530,7 +536,7 @@ export default function GroupPageClient({
                         </section>
                       ) : null}
 
-                      <section className="rounded-2xl bg-slate-900/70 p-5">
+                      <section className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
                         <div className="mb-4 text-lg font-semibold text-white">Miembros</div>
 
                         <div className="scrollbar-elbravo max-h-[620px] space-y-3 overflow-y-auto pr-1">
@@ -539,9 +545,9 @@ export default function GroupPageClient({
                               key={member.id}
                               className="rounded-2xl border border-slate-700 bg-slate-800/80 p-4"
                             >
-                              <div className="flex items-center justify-between gap-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex min-w-0 items-center gap-3">
-                                  <div className="h-12 w-12 overflow-hidden rounded-xl bg-slate-700">
+                                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-700">
                                     {member.photoUrl ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
@@ -557,7 +563,7 @@ export default function GroupPageClient({
                                   </div>
 
                                   <div className="min-w-0">
-                                    <div className="truncate font-semibold text-white">
+                                    <div className="break-words font-semibold text-white">
                                       {member.name ?? member.email}
                                     </div>
 
@@ -569,7 +575,7 @@ export default function GroupPageClient({
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                                   {member.badges.length > 0
                                     ? member.badges.map((badge) => (
                                         <div
@@ -614,13 +620,13 @@ export default function GroupPageClient({
             </div>
 
             <div className="mt-8">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-2xl font-bold text-white">Temporadas</h2>
 
                 {isAdmin ? (
                   <a
                     href={`/group/${group.id}/create-season`}
-                    className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-3 text-center text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 sm:w-auto"
                   >
                     + Nueva temporada
                   </a>
@@ -633,10 +639,10 @@ export default function GroupPageClient({
                     key={season.id}
                     className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70"
                   >
-                    <div className="bg-[linear-gradient(to_right,#4EBEA3,#86D18A,#B7E272)] px-5 py-4 text-slate-900">
+                    <div className="bg-[linear-gradient(to_right,#4EBEA3,#86D18A,#B7E272)] px-4 py-4 text-slate-900 sm:px-5">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div>
-                          <div className="text-2xl font-bold">{season.name}</div>
+                        <div className="min-w-0">
+                          <div className="break-words text-2xl font-bold">{season.name}</div>
                           <div className="mt-1 text-sm font-medium text-slate-900/70">
                             {formatDate(season.startDate)} - {formatDate(season.endDate)}
                           </div>
@@ -660,9 +666,11 @@ export default function GroupPageClient({
                       </div>
                     </div>
 
-                    <div className="p-5">
+                    <div className="p-4 sm:p-5">
                       {season.description ? (
-                        <p className="mb-4 text-sm text-slate-300">{season.description}</p>
+                        <p className="mb-4 break-words text-sm text-slate-300">
+                          {season.description}
+                        </p>
                       ) : null}
 
                       <div className="mb-4 flex flex-wrap gap-2 text-sm">
@@ -701,18 +709,18 @@ export default function GroupPageClient({
                               )}
                             </div>
 
-                            <span>{member.name ?? member.email}</span>
+                            <span className="break-words">{member.name ?? member.email}</span>
                           </div>
                         ))}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                         {!season.joined && !season.isPast ? (
                           <button
                             type="button"
                             onClick={() => joinSeason(season.id)}
                             disabled={loadingAction === `join-${season.id}`}
-                            className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-60"
+                            className="inline-flex w-full items-center justify-center rounded-lg bg-slate-700 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-60 sm:w-auto"
                           >
                             {loadingAction === `join-${season.id}` ? "Uniéndote..." : "Unirme"}
                           </button>
@@ -725,7 +733,7 @@ export default function GroupPageClient({
                                 type="button"
                                 onClick={() => finalizeSeason(season.id)}
                                 disabled={loadingAction === `finalize-${season.id}`}
-                                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-medium text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:opacity-60"
+                                className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-center text-sm font-medium text-white shadow-md hover:from-lime-500 hover:to-lime-700 disabled:opacity-60 sm:w-auto"
                               >
                                 {loadingAction === `finalize-${season.id}`
                                   ? "Finalizando..."
@@ -735,7 +743,7 @@ export default function GroupPageClient({
 
                             <a
                               href={`/group/${group.id}/season/${season.id}/edit`}
-                              className="rounded-lg bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                              className="inline-flex w-full items-center justify-center rounded-lg bg-slate-700 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-600 sm:w-auto"
                             >
                               Editar
                             </a>
@@ -744,7 +752,7 @@ export default function GroupPageClient({
                               type="button"
                               onClick={() => deleteSeason(season.id)}
                               disabled={loadingAction === `delete-${season.id}`}
-                              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60"
+                              className="inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60 sm:w-auto"
                             >
                               {loadingAction === `delete-${season.id}`
                                 ? "Eliminando..."
@@ -753,7 +761,6 @@ export default function GroupPageClient({
                           </>
                         ) : null}
                       </div>
-
                     </div>
                   </article>
                 ))}

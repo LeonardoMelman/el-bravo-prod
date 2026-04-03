@@ -69,22 +69,22 @@ export default function CreateGroupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4">
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-md bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500"
+            className="inline-flex items-center justify-center rounded-md bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500"
           >
             ← Volver atrás
           </button>
         </div>
 
-        <section className="rounded-2xl bg-slate-800 p-6 shadow-lg md:p-8">
+        <section className="rounded-2xl bg-slate-800 p-5 shadow-lg sm:p-6 md:p-8">
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight text-white">
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
                 Crear grupo
               </h1>
               <p className="mt-2 text-sm text-slate-300">
@@ -109,7 +109,7 @@ export default function CreateGroupPage() {
             ))}
           </div>
 
-          <div className="rounded-2xl bg-slate-900/70 p-5 md:p-6">
+          <div className="rounded-2xl bg-slate-900/70 p-4 sm:p-5 md:p-6">
             {step === 0 && (
               <div className="space-y-4">
                 <div>
@@ -153,7 +153,6 @@ export default function CreateGroupPage() {
 
                   {photoUrl ? (
                     <div className="h-40 w-40 overflow-hidden rounded-2xl bg-slate-700">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photoUrl}
                         alt="Vista previa del grupo"
@@ -229,10 +228,9 @@ export default function CreateGroupPage() {
                     Vista previa del grupo
                   </div>
 
-                  <div className="flex items-center gap-4 rounded-2xl bg-slate-900 p-4">
+                  <div className="flex flex-col gap-4 rounded-2xl bg-slate-900 p-4 sm:flex-row sm:items-center">
                     {photoUrl ? (
                       <div className="h-20 w-20 overflow-hidden rounded-2xl bg-slate-700">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={photoUrl}
                           alt="Preview grupo"
@@ -246,10 +244,10 @@ export default function CreateGroupPage() {
                     )}
 
                     <div className="min-w-0">
-                      <div className="truncate text-2xl font-bold text-white">
+                      <div className="break-words text-2xl font-bold text-white">
                         {name || "Nombre del grupo"}
                       </div>
-                      <div className="mt-1 text-sm text-slate-300">
+                      <div className="mt-1 break-words text-sm text-slate-300">
                         {description || "Todavía sin descripción"}
                       </div>
                     </div>
@@ -264,39 +262,41 @@ export default function CreateGroupPage() {
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={back}
-                disabled={step === 0}
-                className="rounded-md bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Atrás
-              </button>
+            <div className="mt-6 flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={back}
+                  disabled={step === 0}
+                  className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Atrás
+                </button>
 
-              {step < 3 ? (
-                <button
-                  type="button"
-                  onClick={next}
-                  className="rounded-md bg-lime-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-lime-500"
-                >
-                  Siguiente
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleCreate()}
-                  disabled={loading}
-                  className="rounded-md bg-lime-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-lime-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loading ? "Creando..." : "Crear grupo"}
-                </button>
-              )}
+                {step < 3 ? (
+                  <button
+                    type="button"
+                    onClick={next}
+                    className="inline-flex w-full items-center justify-center rounded-md bg-lime-600 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-lime-500"
+                  >
+                    Siguiente
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleCreate()}
+                    disabled={loading}
+                    className="inline-flex w-full items-center justify-center rounded-md bg-lime-600 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-lime-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loading ? "Creando..." : "Crear grupo"}
+                  </button>
+                )}
+              </div>
 
               <button
                 type="button"
                 onClick={() => router.push("/home")}
-                className="ml-auto rounded-md bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500"
+                className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-500"
               >
                 Cancelar
               </button>

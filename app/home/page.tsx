@@ -441,11 +441,14 @@ export default async function HomePage() {
             <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-lg font-semibold text-white">Grupos</div>
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:items-center">
-                <JoinGroupModal />
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                <JoinGroupModal
+                  buttonClassName="inline-flex w-full items-center justify-center rounded-lg bg-slate-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-500 sm:w-auto"
+                />
+
                 <a
                   href="/create-group"
-                  className="rounded-lg bg-slate-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-500"
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-slate-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-500 sm:w-auto"
                 >
                   Crear grupo
                 </a>

@@ -432,32 +432,34 @@ export default async function ProfilePage() {
   const stats = computeProfileStats(activities, profileWeeklyGoal);
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center">
             <a
               href="/home"
-              className="inline-flex items-center rounded-md bg-slate-600 px-4 py-2 text-sm font-medium hover:bg-slate-500"
+              className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-medium hover:bg-slate-500 sm:w-auto sm:py-2"
             >
               ← Volver a la home
             </a>
             <a
               href="/profile/edit"
-              className="inline-flex items-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-3 text-center text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 sm:w-auto sm:py-2"
             >
               Editar perfil
             </a>
           </div>
 
-          <LogoutButton />
+          <div className="w-full sm:w-auto">
+            <LogoutButton className="inline-flex w-full items-center justify-center rounded-md bg-slate-600 px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-slate-500 sm:w-auto sm:py-2" />
+          </div>
         </div>
 
-        <section className="rounded-2xl bg-slate-800 p-6 shadow-lg">
+        <section className="rounded-2xl bg-slate-800 p-4 shadow-lg sm:p-6">
           <div className="space-y-5">
-            <div className="rounded-2xl bg-slate-900/60 p-5">
+            <div className="rounded-2xl bg-slate-900/60 p-4 sm:p-5">
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                   <div className="h-24 w-24 overflow-hidden rounded-3xl bg-slate-700">
                     {dbUser.photoUrl ? (
                       <img
@@ -472,11 +474,11 @@ export default async function ProfilePage() {
                     )}
                   </div>
 
-                  <div>
-                    <h1 className="text-4xl font-bold leading-tight">
+                  <div className="min-w-0">
+                    <h1 className="break-words text-3xl font-bold leading-tight sm:text-4xl">
                       {dbUser.name ?? "Sin nombre"}
                     </h1>
-                    <p className="mt-1 text-sm text-slate-400">{dbUser.email}</p>
+                    <p className="mt-1 break-all text-sm text-slate-400">{dbUser.email}</p>
                     <p className="mt-3 text-xs text-slate-400">
                       Objetivo semanal:{" "}
                       <span className="font-semibold text-slate-200">
@@ -503,7 +505,7 @@ export default async function ProfilePage() {
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl bg-slate-900/70 p-5">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <ProfileStatCard
                     label="racha activa más larga"
                     value={stats.longestActiveStreak}
@@ -535,7 +537,7 @@ export default async function ProfilePage() {
                   </div>
                 </div>
 
-                <div className="grid min-h-[220px] grid-cols-3 place-items-center gap-x-4 gap-y-6">
+                <div className="grid min-h-[220px] grid-cols-2 place-items-center gap-x-4 gap-y-6 sm:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, index) => {
                     const award = earnedAwards[index];
 
@@ -577,17 +579,15 @@ export default async function ProfilePage() {
                     );
                   })}
                 </div>
-
-                
               </div>
             </div>
 
             <div className="rounded-2xl bg-slate-900/70 p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-lg font-semibold">Rutinas</div>
                 <a
                   href="/routine"
-                  className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700"
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-3 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700 sm:w-auto sm:py-2"
                 >
                   Ver mis rutinas
                 </a>
@@ -646,16 +646,16 @@ export default async function ProfilePage() {
                   </div>
                 ) : (
                   <div className="scrollbar-elbravo max-h-[620px] space-y-3 overflow-y-auto pr-1">
-                      {activities.map((activity: ActivityForStats) => {
+                    {activities.map((activity: ActivityForStats) => {
                       const minutes = getActivityDurationMinutes(activity);
 
                       return (
                         <div
                           key={activity.id}
-                          className="relative rounded-xl bg-slate-800 px-4 py-4"
+                          className="relative rounded-xl bg-slate-800 px-4 py-4 pb-16 sm:pb-14"
                         >
                           <div className="flex items-start justify-between gap-4">
-                            <div>
+                            <div className="min-w-0">
                               <div className="text-xl font-semibold">
                                 {formatDateLabel(activity.startedAt)}
                               </div>
@@ -664,12 +664,12 @@ export default async function ProfilePage() {
                               </div>
                             </div>
 
-                            <div className="text-right text-sm text-slate-400">
+                            <div className="shrink-0 text-right text-sm text-slate-400">
                               {formatDateTimeLabel(activity.startedAt)}
                             </div>
                           </div>
 
-                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <div className="mt-4 flex flex-wrap items-center gap-2 pr-12 sm:pr-14">
                             <span className="rounded-full bg-indigo-600/20 px-3 py-1 text-xs font-medium text-indigo-300">
                               {getTypeLabel(activity.type)}
                             </span>
@@ -687,8 +687,11 @@ export default async function ProfilePage() {
                           </div>
 
                           {activity.notes ? (
-                            <p className="mt-3 text-sm text-slate-300">“{activity.notes}”</p>
+                            <p className="mt-3 pr-12 text-sm text-slate-300 sm:pr-14">
+                              “{activity.notes}”
+                            </p>
                           ) : null}
+
                           <div className="absolute bottom-3 right-3">
                             <DeleteActivityButton activityId={activity.id} />
                           </div>
@@ -714,8 +717,8 @@ export default async function ProfilePage() {
                         href={`/group/${membership.groupId}`}
                         className="flex items-center justify-between gap-3 rounded-xl bg-slate-800 p-4 transition hover:bg-slate-700"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-11 w-11 overflow-hidden rounded-full bg-slate-600">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-slate-600">
                             {membership.group.photoUrl ? (
                               <img
                                 src={membership.group.photoUrl}
@@ -729,13 +732,17 @@ export default async function ProfilePage() {
                             )}
                           </div>
 
-                          <div>
-                            <div className="font-semibold">{membership.group.name}</div>
-                            <div className="text-sm text-slate-400">Rol: {membership.role}</div>
+                          <div className="min-w-0">
+                            <div className="break-words font-semibold">
+                              {membership.group.name}
+                            </div>
+                            <div className="text-sm text-slate-400">
+                              Rol: {membership.role}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="text-sm text-slate-400">
+                        <div className="shrink-0 text-sm text-slate-400">
                           {new Date(membership.joinedAt).toLocaleDateString("es-AR")}
                         </div>
                       </a>
