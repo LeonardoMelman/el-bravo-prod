@@ -281,12 +281,12 @@ export default async function HomePage() {
   const filledDots = Math.min(stats.workoutsThisWeek, 7);
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
-        <section className="rounded-[28px] bg-slate-800/80 p-6 shadow-2xl">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <a href="/profile" className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-slate-200">
+        <section className="rounded-[22px] bg-slate-800/80 p-3 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <a href="/profile" className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-700 text-slate-200 sm:h-16 sm:w-16">
                 {dbUser.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -299,56 +299,59 @@ export default async function HomePage() {
                 )}
               </div>
 
-              <div>
-                <div className="text-sm text-slate-300">Hola,</div>
-                <div className="text-4xl font-bold leading-tight">
+              <div className="min-w-0">
+                <div className="text-xs text-slate-300 sm:text-sm">Hola,</div>
+                <div className="break-words text-3xl font-bold leading-tight sm:text-4xl">
                   {dbUser.name ?? dbUser.email}
                 </div>
-                <div className="mt-1 text-sm text-slate-400">
+                <div className="mt-1 text-xs text-slate-400 sm:text-sm">
                   🔥 Estás cerca de una semana perfecta.
                 </div>
               </div>
             </a>
 
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:items-center">
               <a
                 href="/profile"
-                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700"
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-center text-sm font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700"
               >
                 Mi perfil
               </a>
-              <LogoutButton />
+
+              <div className="w-full [&>button]:w-full [&>button]:text-center lg:w-auto lg:[&>button]:w-auto">
+                <LogoutButton />
+              </div>
             </div>
           </div>
 
           <div className="mb-5">
             <a
               href="/load"
-              className="block w-full rounded-xl bg-gradient-to-b from-lime-600 to-lime-800 px-6 py-4 text-center text-xl font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700"
+              className="block w-full rounded-xl bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-4 text-center text-lg font-semibold text-white shadow-md transition hover:from-lime-500 hover:to-lime-700 sm:px-6 sm:text-xl"
             >
               Registrar entrenamiento
             </a>
           </div>
 
           <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-2xl bg-slate-900/70 p-6 text-center">
-              <div className="text-6xl font-bold leading-none text-white">
+            <div className="rounded-2xl bg-slate-900/70 p-5 text-center sm:p-6">
+              <div className="text-5xl font-bold leading-none text-white sm:text-6xl">
                 {stats.activeWeeks}
               </div>
-              <div className="mt-4 text-3xl font-semibold text-slate-300">
+              <div className="mt-4 text-2xl font-semibold text-slate-300 sm:text-3xl">
                 semanas activas
               </div>
             </div>
 
-            <div className="rounded-2xl bg-slate-900/70 p-6 text-center">
-              <div className="mb-4 flex items-center justify-center gap-3">
+            <div className="rounded-2xl bg-slate-900/70 p-5 text-center sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
                 {Array.from({ length: totalDots }).map((_, index) => {
                   const filled = index < filledDots;
 
                   return (
                     <span
                       key={index}
-                      className={`block h-10 w-10 rounded-full border-4 ${
+                      className={`block h-7 w-7 rounded-full border-4 sm:h-10 sm:w-10 ${
                         filled
                           ? "border-lime-500 bg-lime-500/30"
                           : "border-slate-700 bg-transparent"
@@ -358,27 +361,27 @@ export default async function HomePage() {
                 })}
               </div>
 
-              <div className="text-3xl font-semibold text-slate-300">
+              <div className="text-2xl font-semibold text-slate-300 sm:text-3xl">
                 entrenamientos esta semana
               </div>
             </div>
 
-            <div className="rounded-2xl bg-lime-600 p-6 text-center text-white">
-              <div className="text-6xl font-bold leading-none">
+            <div className="rounded-2xl bg-lime-600 p-5 text-center text-white sm:p-6">
+              <div className="text-5xl font-bold leading-none sm:text-6xl">
                 {stats.perfectWeeks}
               </div>
-              <div className="mt-4 text-3xl font-semibold text-lime-100">
+              <div className="mt-4 text-2xl font-semibold text-lime-100 sm:text-3xl">
                 semanas perfectas
               </div>
             </div>
           </div>
 
-          <section className="mb-5 rounded-2xl bg-slate-900/70 p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <section className="mb-5 rounded-2xl bg-slate-900/70 p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-lg font-semibold text-white">Rutinas</div>
               <a
                 href="/routine"
-                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700"
+                className="rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-4 py-2 text-center text-sm font-semibold text-white shadow-md hover:from-lime-500 hover:to-lime-700"
               >
                 Ver mis rutinas
               </a>
@@ -396,7 +399,9 @@ export default async function HomePage() {
                     className="rounded-xl bg-gradient-to-r from-red-700/80 to-violet-700/80 p-[1px]"
                   >
                     <div className="rounded-xl bg-slate-900 px-4 py-5">
-                      <div className="text-lg font-bold">{routine.name}</div>
+                      <div className="break-words text-lg font-bold">
+                        {routine.name}
+                      </div>
                       <div className="mt-2 text-sm text-slate-300">
                         {routine.exercises.length} ejercicio
                         {routine.exercises.length === 1 ? "" : "s"}
@@ -424,7 +429,7 @@ export default async function HomePage() {
 
                 <a
                   href="/create-routine"
-                  className="flex min-h-[156px] items-center justify-center rounded-xl bg-slate-700 text-6xl font-bold text-white transition hover:bg-slate-600"
+                  className="flex min-h-[140px] items-center justify-center rounded-xl bg-slate-700 text-6xl font-bold text-white transition hover:bg-slate-600 sm:min-h-[156px]"
                 >
                   +
                 </a>
@@ -432,15 +437,15 @@ export default async function HomePage() {
             )}
           </section>
 
-          <section className="rounded-2xl bg-slate-900/70 p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <section className="rounded-2xl bg-slate-900/70 p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-lg font-semibold text-white">Grupos</div>
 
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:items-center">
                 <JoinGroupModal />
                 <a
                   href="/create-group"
-                  className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500"
+                  className="rounded-lg bg-slate-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-500"
                 >
                   Crear grupo
                 </a>
@@ -461,12 +466,12 @@ export default async function HomePage() {
                     <a
                       key={membership.id}
                       href={`/group/${membership.groupId}`}
-                      className={`flex items-center justify-between gap-4 rounded-2xl p-4 transition ${getGroupCardClasses(
+                      className={`flex flex-col gap-4 rounded-2xl p-4 transition sm:p-5 lg:flex-row lg:items-center lg:justify-between ${getGroupCardClasses(
                         activeSeason
                       )}`}
                     >
-                      <div className="flex min-w-0 items-center gap-4">
-                        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl bg-slate-700 text-3xl font-bold text-white">
+                      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-700 text-2xl font-bold text-white sm:h-20 sm:w-20 sm:text-3xl">
                           {membership.group.photoUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -480,11 +485,11 @@ export default async function HomePage() {
                         </div>
 
                         <div className="min-w-0">
-                          <div className="truncate text-3xl font-bold text-white">
+                          <div className="break-words text-2xl font-bold leading-tight text-white sm:text-3xl">
                             {membership.group.name}
                           </div>
 
-                          <div className="mt-1 text-sm text-slate-300">
+                          <div className="mt-1 break-words text-sm text-slate-300 sm:text-base">
                             {season
                               ? season.name ?? "Temporada activa"
                               : "Sin temporada activa"}
@@ -497,7 +502,7 @@ export default async function HomePage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         {membership.group.members.slice(0, 3).map((member) => (
                           <div
                             key={member.user.id}
