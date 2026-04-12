@@ -24,7 +24,6 @@
   --color-calendargreen: linear-gradient(to bottom, #8AC617, #63710B);
   --color-calendargray: #838383;
   --color-graytext: #606060;
-
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -33,9 +32,106 @@
   }
 }
 
+/* ─── Leo Theme (default) ───────────────────────────────────────────────────── */
+[data-theme="leo"] body {
+  background-color: #08142d;
+  color: #ffffff;
+}
+
+/* ─── Manu Theme ─────────────────────────────────────────────────────────────── */
+[data-theme="manu"] body {
+  background: linear-gradient(to bottom, #181819, #0A0A0A);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: #ffffff;
+}
+
+/*
+ * Manu Theme: override Tailwind's blue-tinted slate palette with neutral grays.
+ * This makes bg-slate-600 through bg-slate-900 (and their hover/opacity variants)
+ * automatically adapt to the Manu look without changing any class names in components.
+ */
+[data-theme="manu"] {
+  --color-slate-600: #3a3a3a;
+  --color-slate-700: #2d2d2d;
+  --color-slate-800: #262626;
+  --color-slate-900: #1a1a1a;
+  --color-slate-950: #0f0f0f;
+}
+
+/* ─── Page background utility ────────────────────────────────────────────────
+ * Replaces the hardcoded bg-[#08142d] on <main> elements.
+ * In Leo: the same navy color. In Manu: transparent so the body gradient shows.
+ */
+[data-theme="leo"] .t-page-bg {
+  background-color: #08142d;
+}
+[data-theme="manu"] .t-page-bg {
+  background-color: transparent;
+}
+
+/* ─── Navbar background utility ──────────────────────────────────────────────
+ * Replaces bg-[#3b4f6c] on the <header> navbar.
+ */
+[data-theme="leo"] .t-navbar {
+  background-color: #3b4f6c;
+}
+[data-theme="manu"] .t-navbar {
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+/* ─── Accent surface utility ─────────────────────────────────────────────────
+ * Used for elements that adopt the navbar accent color (e.g. selected filter
+ * button, "semanas activas" stat card).
+ */
+[data-theme="leo"] .t-accent-surface {
+  background-color: #3b4f6c;
+}
+[data-theme="manu"] .t-accent-surface {
+  background-color: #262626;
+  border: 1px solid #3a3a3a;
+}
+
+/* ─── Dark surface utility ───────────────────────────────────────────────────
+ * Used for the deep navy bg elements like #0f1f3d (filter bar backgrounds).
+ */
+[data-theme="leo"] .t-dark-surface {
+  background-color: #0f1f3d;
+}
+[data-theme="manu"] .t-dark-surface {
+  background-color: #1a1a1a;
+}
+
+/* ─── Mid surface utility ────────────────────────────────────────────────────
+ * Used for #1f2f4a (e.g. "entrenamientos esta semana" stat card).
+ */
+[data-theme="leo"] .t-mid-surface {
+  background-color: #1f2f4a;
+}
+[data-theme="manu"] .t-mid-surface {
+  background-color: #222222;
+}
+
+/* ─── Border accent utility ──────────────────────────────────────────────────
+ * Used where border-[#3b4f6c] appears (filter bar wrapper).
+ */
+[data-theme="leo"] .t-border-accent {
+  border-color: #3b4f6c;
+}
+[data-theme="manu"] .t-border-accent {
+  border-color: #3a3a3a;
+}
+
+/* ─── Empty circle utility (UserActiveStats progress circles) ─────────────── */
+[data-theme="leo"] .t-circle-empty {
+  border-color: #41556f;
+}
+[data-theme="manu"] .t-circle-empty {
+  border-color: #484848;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -112,4 +208,3 @@ body {
 .scrollbar-elbravo::-webkit-scrollbar-corner {
   background: #0f172a;
 }
-

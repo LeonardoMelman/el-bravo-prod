@@ -18,7 +18,7 @@ export default async function EditProfilePage() {
     (dbUser as typeof dbUser & { weeklyGoal?: number | null }).weeklyGoal ?? 3;
 
   return (
-    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+    <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <a
