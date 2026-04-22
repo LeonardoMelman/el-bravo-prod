@@ -51,6 +51,11 @@ type CreatedScoreEventEntry = {
   points: number;
 };
 
+type SeasonPostProcessingEntry = {
+  seasonId: string;
+  weeklyGoal: number;
+};
+
 class ActivityCreateHttpError extends Error {
   status: number;
 
@@ -148,10 +153,7 @@ export async function POST(req: Request) {
     const e = new Date(endedAt);
 
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || s >= e) {
-      return NextResponse.json(
-        { error: "Invalid dates" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid dates" }, { status: 400 });
     }
 
     const durationMinutes = Math.max(
@@ -227,298 +229,329 @@ export async function POST(req: Request) {
       }
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
-      const activityCategory = await tx.activityCategory.findUnique({
-        where: { id: activityCategoryId },
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-        },
-      });
-
-      if (!activityCategory) {
-        throw new ActivityCreateHttpError(400, "Invalid activity category");
-      }
-
-      const normalizedType = mapCategorySlugToLegacyType(activityCategory.slug);
-      const weekStart = startOfWeekMonday(s);
-
-      const activity = await tx.activity.create({
-        data: {
-          userId: user.id,
-          startedAt: s,
-          endedAt: e,
-          durationMinutes,
-          notes: typeof notes === "string" && notes.trim().length > 0 ? notes : null,
-          type: normalizedType,
-          activityCategoryId: activityCategory.id,
-          routineId:
-            typeof routineId === "string" && routineId.trim().length > 0
-              ? routineId
-              : null,
-        },
-      });
-
-      const exerciseIdsSet = new Set<string>();
-      for (const item of normalizedExercises) {
-        exerciseIdsSet.add(item.exerciseId);
-      }
-      const exerciseIds = Array.from(exerciseIdsSet);
-
-      const existingExercisesRaw = await tx.exercise.findMany({
-        where: {
-          id: { in: exerciseIds },
-        },
-        select: {
-          id: true,
-          measureType: true,
-        },
-      });
-
-      const existingExercises = existingExercisesRaw as ExistingExerciseEntry[];
-
-      if (existingExercises.length !== exerciseIds.length) {
-        throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
-      }
-
-      const exerciseById = new Map<string, ExistingExerciseEntry>();
-      for (const exercise of existingExercises) {
-        exerciseById.set(exercise.id, exercise);
-      }
-
-      const activityExercisesData: Array<{
-        activityId: string;
-        exerciseId: string;
-        sets: number;
-        reps: number | null;
-        durationSeconds: number | null;
-        weightKg: number | null;
-      }> = [];
-
-      for (const item of normalizedExercises) {
-        const exercise = exerciseById.get(item.exerciseId);
-
-        if (!exercise) {
-          throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
-        }
-
-        const reps = parseNullableNumber(item.reps);
-        const durationSeconds = parseNullableNumber(item.durationSeconds);
-        const weightKg = parseNullableNumber(item.weightKg);
-
-        activityExercisesData.push({
-          activityId: activity.id,
-          exerciseId: item.exerciseId,
-          sets: Number(item.sets),
-          reps: exercise.measureType === "reps" ? reps : null,
-          durationSeconds:
-            exercise.measureType === "duration" ? durationSeconds : null,
-          weightKg,
-        });
-      }
-
-      await tx.activityExercise.createMany({
-        data: activityExercisesData,
-      });
-
-      const candidateSeasonsRaw = await tx.season.findMany({
-        where: {
-          isActive: true,
-          startDate: { lte: s },
-          endDate: { gte: s },
-          members: {
-            some: {
-              userId: user.id,
-              leftAt: null,
-            },
-          },
-        },
-        select: {
-          id: true,
-          weeklyGoal: true,
-          basePointsPerActivity: true,
-          weeklyStreakBonus: true,
-          perfectWeekBonus: true,
-          allowedActivityTypeLinks: {
-            select: {
-              activityCategoryId: true,
-            },
-          },
-          maxScoreableMinutesPerActivity: true,
-        },
-      });
-
-      const candidateSeasons = candidateSeasonsRaw as CandidateSeasonEntry[];
-      const createdScoreEvents: CreatedScoreEventEntry[] = [];
-
-      for (const season of candidateSeasons) {
-        const allowedCategoryIds = normalizeAllowedActivityCategoryIds(
-          season.allowedActivityTypeLinks
-        );
-
-        if (
-          allowedCategoryIds.length > 0 &&
-          !allowedCategoryIds.includes(activityCategory.id)
-        ) {
-          continue;
-        }
-
-        const previousLinkedActivitiesRaw = await tx.activitySeason.findMany({
-          where: {
-            seasonId: season.id,
-            activity: {
-              userId: user.id,
-              isDeleted: false,
-              startedAt: {
-                lt: s,
-              },
-            },
-          },
+    const result = await prisma.$transaction(
+      async (tx: any) => {
+        const activityCategory = await tx.activityCategory.findUnique({
+          where: { id: activityCategoryId },
           select: {
-            activity: {
-              select: {
-                startedAt: true,
-              },
-            },
+            id: true,
+            slug: true,
+            name: true,
           },
         });
 
-        const previousLinkedActivities =
-          previousLinkedActivitiesRaw as PreviousLinkedActivityEntry[];
-
-        const previousDates: Date[] = [];
-        for (const entry of previousLinkedActivities) {
-          previousDates.push(entry.activity.startedAt);
+        if (!activityCategory) {
+          throw new ActivityCreateHttpError(400, "Invalid activity category");
         }
 
-        const previousWeekCounts = buildWeekCounts(previousDates);
+        const normalizedType = mapCategorySlugToLegacyType(activityCategory.slug);
+        const weekStart = startOfWeekMonday(s);
 
-        const currentActiveWeekStreak = getCurrentConsecutiveWeekStreak(
-          previousWeekCounts,
-          (count) => count >= 1,
-          s
-        );
-
-        const currentPerfectWeekStreak = getCurrentConsecutiveWeekStreak(
-          previousWeekCounts,
-          (count) => count >= season.weeklyGoal,
-          s
-        );
-
-        const previousActivity = await tx.activity.findFirst({
-          where: {
+        const activity = await tx.activity.create({
+          data: {
             userId: user.id,
-            isDeleted: false,
-            startedAt: { lt: s },
-            activitySeasons: {
-              some: {
-                seasonId: season.id,
-              },
-            },
-          },
-          orderBy: {
-            startedAt: "desc",
-          },
-          select: {
-            startedAt: true,
-          },
-        });
-
-        const daysSincePreviousActivity = previousActivity
-          ? diffInFullDays(s, previousActivity.startedAt)
-          : null;
-
-        const score = calculateActivityScore({
-          activity: {
-            id: activity.id,
-            type: normalizedType,
             startedAt: s,
             endedAt: e,
             durationMinutes,
+            notes:
+              typeof notes === "string" && notes.trim().length > 0
+                ? notes.trim()
+                : null,
+            type: normalizedType,
+            activityCategoryId: activityCategory.id,
+            routineId:
+              typeof routineId === "string" && routineId.trim().length > 0
+                ? routineId.trim()
+                : null,
           },
-          season: {
-            id: season.id,
-            weeklyGoal: season.weeklyGoal,
-            basePointsPerActivity: season.basePointsPerActivity,
-            allowedActivityTypes: [activityCategory.slug],
-            maxScoreableMinutesPerActivity:
-              season.maxScoreableMinutesPerActivity,
-          },
-          currentActiveWeekStreak,
-          currentPerfectWeekStreak,
-          daysSincePreviousActivity,
         });
 
-        if (!score.eligible || score.totalPoints <= 0) {
-          continue;
+        const exerciseIdsSet = new Set<string>();
+        for (const item of normalizedExercises) {
+          exerciseIdsSet.add(item.exerciseId);
+        }
+        const exerciseIds = Array.from(exerciseIdsSet);
+
+        const existingExercisesRaw = await tx.exercise.findMany({
+          where: {
+            id: { in: exerciseIds },
+          },
+          select: {
+            id: true,
+            measureType: true,
+          },
+        });
+
+        const existingExercises = existingExercisesRaw as ExistingExerciseEntry[];
+
+        if (existingExercises.length !== exerciseIds.length) {
+          throw new ActivityCreateHttpError(
+            400,
+            "One or more exercises do not exist"
+          );
         }
 
-        await tx.activitySeason.create({
-          data: {
+        const exerciseById = new Map<string, ExistingExerciseEntry>();
+        for (const exercise of existingExercises) {
+          exerciseById.set(exercise.id, exercise);
+        }
+
+        const activityExercisesData: Array<{
+          activityId: string;
+          exerciseId: string;
+          sets: number;
+          reps: number | null;
+          durationSeconds: number | null;
+          weightKg: number | null;
+        }> = [];
+
+        for (const item of normalizedExercises) {
+          const exercise = exerciseById.get(item.exerciseId);
+
+          if (!exercise) {
+            throw new ActivityCreateHttpError(
+              400,
+              "One or more exercises do not exist"
+            );
+          }
+
+          const reps = parseNullableNumber(item.reps);
+          const durationSeconds = parseNullableNumber(item.durationSeconds);
+          const weightKg = parseNullableNumber(item.weightKg);
+
+          activityExercisesData.push({
             activityId: activity.id,
-            seasonId: season.id,
-          },
-        });
-
-        await tx.scoreEvent.create({
-          data: {
-            seasonId: season.id,
-            userId: user.id,
-            activityId: activity.id,
-            weekStart,
-            type: "activity_base",
-            points: score.totalPoints,
-            reason: "Scoring base por actividad",
-            metadata: {
-              ...score.metadata,
-              activityCategoryId: activityCategory.id,
-              activityCategorySlug: activityCategory.slug,
-              activityCategoryName: activityCategory.name,
-            },
-          },
-        });
-
-        createdScoreEvents.push({
-          seasonId: season.id,
-          points: score.totalPoints,
-        });
-
-        const recalculatedWeeks = await recalculateSeasonWeekProgress({
-          tx,
-          seasonId: season.id,
-          userId: user.id,
-          weeklyGoal: season.weeklyGoal,
-        });
-
-        await tx.scoreEvent.deleteMany({
-          where: {
-            seasonId: season.id,
-            userId: user.id,
-            type: {
-              in: ["weekly_streak_bonus", "perfect_week_bonus"],
-            },
-          },
-        });
-
-        for (const week of recalculatedWeeks) {
-          await applyWeeklyBonuses({
-            tx,
-            seasonId: season.id,
-            userId: user.id,
-            weekStart: week.weekStart,
+            exerciseId: item.exerciseId,
+            sets: Number(item.sets),
+            reps: exercise.measureType === "reps" ? reps : null,
+            durationSeconds:
+              exercise.measureType === "duration" ? durationSeconds : null,
+            weightKg,
           });
         }
+
+        await tx.activityExercise.createMany({
+          data: activityExercisesData,
+        });
+
+        const candidateSeasonsRaw = await tx.season.findMany({
+          where: {
+            isActive: true,
+            startDate: { lte: s },
+            endDate: { gte: s },
+            members: {
+              some: {
+                userId: user.id,
+                leftAt: null,
+              },
+            },
+          },
+          select: {
+            id: true,
+            weeklyGoal: true,
+            basePointsPerActivity: true,
+            weeklyStreakBonus: true,
+            perfectWeekBonus: true,
+            allowedActivityTypeLinks: {
+              select: {
+                activityCategoryId: true,
+              },
+            },
+            maxScoreableMinutesPerActivity: true,
+          },
+        });
+
+        const candidateSeasons = candidateSeasonsRaw as CandidateSeasonEntry[];
+        const createdScoreEvents: CreatedScoreEventEntry[] = [];
+        const seasonsToPostProcess: SeasonPostProcessingEntry[] = [];
+
+        for (const season of candidateSeasons) {
+          const allowedCategoryIds = normalizeAllowedActivityCategoryIds(
+            season.allowedActivityTypeLinks
+          );
+
+          if (
+            allowedCategoryIds.length > 0 &&
+            !allowedCategoryIds.includes(activityCategory.id)
+          ) {
+            continue;
+          }
+
+          const previousLinkedActivitiesRaw = await tx.activitySeason.findMany({
+            where: {
+              seasonId: season.id,
+              activity: {
+                userId: user.id,
+                isDeleted: false,
+                startedAt: {
+                  lt: s,
+                },
+              },
+            },
+            select: {
+              activity: {
+                select: {
+                  startedAt: true,
+                },
+              },
+            },
+          });
+
+          const previousLinkedActivities =
+            previousLinkedActivitiesRaw as PreviousLinkedActivityEntry[];
+
+          const previousDates: Date[] = [];
+          for (const entry of previousLinkedActivities) {
+            previousDates.push(entry.activity.startedAt);
+          }
+
+          const previousWeekCounts = buildWeekCounts(previousDates);
+
+          const currentActiveWeekStreak = getCurrentConsecutiveWeekStreak(
+            previousWeekCounts,
+            (count) => count >= 1,
+            s
+          );
+
+          const currentPerfectWeekStreak = getCurrentConsecutiveWeekStreak(
+            previousWeekCounts,
+            (count) => count >= season.weeklyGoal,
+            s
+          );
+
+          const previousActivity = await tx.activity.findFirst({
+            where: {
+              userId: user.id,
+              isDeleted: false,
+              startedAt: { lt: s },
+              activitySeasons: {
+                some: {
+                  seasonId: season.id,
+                },
+              },
+            },
+            orderBy: {
+              startedAt: "desc",
+            },
+            select: {
+              startedAt: true,
+            },
+          });
+
+          const daysSincePreviousActivity = previousActivity
+            ? diffInFullDays(s, previousActivity.startedAt)
+            : null;
+
+          const score = calculateActivityScore({
+            activity: {
+              id: activity.id,
+              type: normalizedType,
+              startedAt: s,
+              endedAt: e,
+              durationMinutes,
+            },
+            season: {
+              id: season.id,
+              weeklyGoal: season.weeklyGoal,
+              basePointsPerActivity: season.basePointsPerActivity,
+              allowedActivityTypes: [activityCategory.slug],
+              maxScoreableMinutesPerActivity:
+                season.maxScoreableMinutesPerActivity,
+            },
+            currentActiveWeekStreak,
+            currentPerfectWeekStreak,
+            daysSincePreviousActivity,
+          });
+
+          if (!score.eligible || score.totalPoints <= 0) {
+            continue;
+          }
+
+          await tx.activitySeason.create({
+            data: {
+              activityId: activity.id,
+              seasonId: season.id,
+            },
+          });
+
+          await tx.scoreEvent.create({
+            data: {
+              seasonId: season.id,
+              userId: user.id,
+              activityId: activity.id,
+              weekStart,
+              type: "activity_base",
+              points: score.totalPoints,
+              reason: "Scoring base por actividad",
+              metadata: {
+                ...score.metadata,
+                activityCategoryId: activityCategory.id,
+                activityCategorySlug: activityCategory.slug,
+                activityCategoryName: activityCategory.name,
+              },
+            },
+          });
+
+          createdScoreEvents.push({
+            seasonId: season.id,
+            points: score.totalPoints,
+          });
+
+          seasonsToPostProcess.push({
+            seasonId: season.id,
+            weeklyGoal: season.weeklyGoal,
+          });
+        }
+
+        return {
+          ok: true,
+          activityId: activity.id,
+          createdScoreEvents,
+          seasonsToPostProcess,
+        };
+      },
+      {
+        timeout: 15000,
+        maxWait: 5000,
       }
+    );
 
-      return {
-        ok: true,
-        activityId: activity.id,
-        createdScoreEvents,
-      };
-    });
+    for (const season of result.seasonsToPostProcess) {
+      const recalculatedWeeks = await recalculateSeasonWeekProgress({
+        tx: prisma,
+        seasonId: season.seasonId,
+        userId: user.id,
+        weeklyGoal: season.weeklyGoal,
+      });
 
-    return NextResponse.json(result, { status: 201 });
+      await prisma.scoreEvent.deleteMany({
+        where: {
+          seasonId: season.seasonId,
+          userId: user.id,
+          type: {
+            in: ["weekly_streak_bonus", "perfect_week_bonus"],
+          },
+        },
+      });
+
+      for (const week of recalculatedWeeks) {
+        await applyWeeklyBonuses({
+          tx: prisma,
+          seasonId: season.seasonId,
+          userId: user.id,
+          weekStart: week.weekStart,
+        });
+      }
+    }
+
+    return NextResponse.json(
+      {
+        ok: result.ok,
+        activityId: result.activityId,
+        createdScoreEvents: result.createdScoreEvents,
+      },
+      { status: 201 }
+    );
   } catch (err) {
     if (err instanceof ActivityCreateHttpError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
