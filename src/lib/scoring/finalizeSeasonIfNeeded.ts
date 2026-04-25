@@ -1,5 +1,7 @@
 import { prisma } from "@/src/lib/db";
 import { finalizeSeasonScoring } from "@/src/lib/scoring/finalizeSeasonScoring";
+import { Prisma } from "@prisma/client";
+
 
 export async function finalizeSeasonIfNeeded(seasonId: string) {
   const season = await prisma.season.findUnique({
@@ -21,7 +23,7 @@ export async function finalizeSeasonIfNeeded(seasonId: string) {
     return null;
   }
 
-  return prisma.$transaction(async (tx: any) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     return finalizeSeasonScoring({
       tx,
       seasonId: season.id,

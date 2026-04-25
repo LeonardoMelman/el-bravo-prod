@@ -40,7 +40,7 @@ export type CalculateActivityScoreResult = {
     durationMinutesUsed: number;
     weeklyGoal: number;
     basePointsPerActivity: number;
-    durationMultiplier: number;
+    durationMultiplier: boolean;
     consistencyMultiplier: number;
     currentActiveWeekStreak: number;
     currentPerfectWeekStreak: number;
@@ -154,7 +154,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "activity_type_not_allowed",
@@ -164,7 +164,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
@@ -190,7 +190,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "below_min_duration",
@@ -200,7 +200,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
@@ -222,7 +222,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "invalid_duration",
@@ -232,7 +232,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
