@@ -198,6 +198,27 @@ export default function CreateActivityForm() {
 
   const hasSelectedRoutine = !!selectedRoutineId && !!selectedRoutine;
 
+  const selectedActivityCategory = useMemo(
+    () =>
+      activityCategories.find((category) => category.id === activityCategoryId) ?? null,
+    [activityCategories, activityCategoryId]
+  );
+
+  const isStrengthActivity =
+    selectedActivityCategory?.slug === "strength" ||
+    selectedActivityCategory?.name?.toLowerCase() === "fuerza";
+
+  useEffect(() => {
+    if (!isStrengthActivity) {
+      setSelectedRoutineId("");
+      setExercises([]);
+      setUpdateRoutineMessage("");
+      setSearchTerms({});
+      setOpenSearchIndex(null);
+      setIsCreatingNewExercise({});
+    }
+  }, [isStrengthActivity]);
+
   function applyRoutine(routineId: string) {
     setSelectedRoutineId(routineId);
     setError("");
@@ -289,7 +310,6 @@ export default function CreateActivityForm() {
       setOpenSearchIndex(null);
     }
   }
-
 
   function getExerciseName(exerciseId?: string) {
     if (!exerciseId || exerciseId === "__new") return "";
@@ -519,7 +539,6 @@ export default function CreateActivityForm() {
   }
 
   function validateExercisesForSave(items = exercises) {
-
     for (const exercise of items) {
       if (!exercise.exerciseId) {
         return "Todos los ejercicios deben estar seleccionados.";
@@ -667,16 +686,22 @@ export default function CreateActivityForm() {
       return;
     }
 
-    const finalExercises = await createNewExercisesIfNeeded(exercises);
+    let finalExercises: ActivityExerciseFormItem[] = [];
 
-    if (!finalExercises) {
-      return;
-    }
+    if (isStrengthActivity) {
+      const createdExercises = await createNewExercisesIfNeeded(exercises);
 
-    const validationError = validateExercisesForSave(finalExercises);
-    if (validationError) {
-      setError(validationError);
-      return;
+      if (!createdExercises) {
+        return;
+      }
+
+      const validationError = validateExercisesForSave(createdExercises);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      finalExercises = createdExercises;
     }
 
     const startedAt = buildDateTime(date, startTime);
@@ -696,8 +721,8 @@ export default function CreateActivityForm() {
         endedAt: endedAt.toISOString(),
         activityCategoryId,
         notes: notes.trim() || null,
-        routineId: selectedRoutineId || null,
-        exercises: normalizeExercisesPayload(finalExercises),
+        routineId: isStrengthActivity ? selectedRoutineId || null : null,
+        exercises: isStrengthActivity ? normalizeExercisesPayload(finalExercises) : [],
       };
 
       const res = await fetch("/api/activities/create", {
@@ -734,7 +759,7 @@ export default function CreateActivityForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={`grid grid-cols-1 gap-4 ${isStrengthActivity ? "md:grid-cols-2" : ""}`}>
           <div className="rounded-xl bg-slate-800 p-4">
             <label className="mb-2 block text-sm font-semibold text-slate-200">
               Tipo de actividad
@@ -753,29 +778,31 @@ export default function CreateActivityForm() {
             </select>
           </div>
 
-          <div className="rounded-xl bg-slate-800 p-4">
-            <label className="mb-2 block text-sm font-semibold text-slate-200">
-              Rutina
-            </label>
-            <select
-              value={selectedRoutineId}
-              onChange={(e) => applyRoutine(e.target.value)}
-              className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-            >
-              <option value="">-- Ninguna --</option>
-              {routines.map((routine) => (
-                <option key={routine.id} value={routine.id}>
-                  {routine.name}
-                </option>
-              ))}
-            </select>
+          {isStrengthActivity ? (
+            <div className="rounded-xl bg-slate-800 p-4">
+              <label className="mb-2 block text-sm font-semibold text-slate-200">
+                Rutina
+              </label>
+              <select
+                value={selectedRoutineId}
+                onChange={(e) => applyRoutine(e.target.value)}
+                className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+              >
+                <option value="">-- Ninguna --</option>
+                {routines.map((routine) => (
+                  <option key={routine.id} value={routine.id}>
+                    {routine.name}
+                  </option>
+                ))}
+              </select>
 
-            {selectedRoutine ? (
-              <p className="mt-2 text-xs text-slate-400">
-                Se cargaron automáticamente {selectedRoutine.exercises.length} ejercicios.
-              </p>
-            ) : null}
-          </div>
+              {selectedRoutine ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  Se cargaron automáticamente {selectedRoutine.exercises.length} ejercicios.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -832,374 +859,379 @@ export default function CreateActivityForm() {
           />
         </div>
 
-        <div className="rounded-xl bg-slate-800 p-4">
-          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-white">Ejercicios</h2>
-              <p className="text-sm text-slate-400">
-                Agregá ejercicios, series y reps o tiempo según corresponda.
-              </p>
-            </div>
+        {isStrengthActivity ? (
+          <div className="rounded-xl bg-slate-800 p-4">
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-white">Ejercicios</h2>
+                <p className="text-sm text-slate-400">
+                  Agregá ejercicios, series y reps o tiempo según corresponda.
+                </p>
+              </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
-              {hasSelectedRoutine ? (
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+                {hasSelectedRoutine ? (
+                  <button
+                    type="button"
+                    onClick={handleUpdateRoutine}
+                    disabled={updatingRoutine || saving || loadingData}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {updatingRoutine ? "Actualizando..." : "Actualizar rutina"}
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
-                  onClick={handleUpdateRoutine}
-                  disabled={updatingRoutine || saving || loadingData}
-                  className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={addExercise}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-slate-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-slate-500"
                 >
-                  {updatingRoutine ? "Actualizando..." : "Actualizar rutina"}
+                  + Agregar ejercicio
                 </button>
-              ) : null}
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={addExercise}
-                className="inline-flex w-full items-center justify-center rounded-lg bg-slate-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-slate-500"
+            {updateRoutineMessage ? (
+              <div
+                className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+                  updateRoutineMessage.includes("correctamente")
+                    ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                    : "border border-amber-500/40 bg-amber-500/10 text-amber-300"
+                }`}
               >
-                + Agregar ejercicio
-              </button>
-            </div>
-          </div>
+                {updateRoutineMessage}
+              </div>
+            ) : null}
 
-          {updateRoutineMessage ? (
-            <div
-              className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-                updateRoutineMessage.includes("correctamente")
-                  ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                  : "border border-amber-500/40 bg-amber-500/10 text-amber-300"
-              }`}
-            >
-              {updateRoutineMessage}
-            </div>
-          ) : null}
+            {loadingData ? (
+              <div className="rounded-lg bg-slate-900 px-4 py-4 text-sm text-slate-400">
+                Cargando ejercicios y rutinas...
+              </div>
+            ) : exercises.length === 0 ? (
+              <div className="rounded-lg bg-slate-900 px-4 py-4 text-sm text-slate-400">
+                Todavía no agregaste ejercicios.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {exercises.map((exercise, index) => (
+                  <div
+                    key={`${exercise.exerciseId}-${index}`}
+                    className="rounded-xl bg-slate-900 p-4"
+                  >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                      <div>
+                        {(() => {
+                          const selectedExerciseName = getExerciseName(exercise.exerciseId);
+                          const filteredExercises = getFilteredExercises(index);
+                          const isCreating = isCreatingNewExercise[index];
+                          const newExerciseMuscles = exercise.newExerciseMuscles ?? [];
+                          const muscleTotal = getTotalMusclePercentage(newExerciseMuscles);
 
-          {loadingData ? (
-            <div className="rounded-lg bg-slate-900 px-4 py-4 text-sm text-slate-400">
-              Cargando ejercicios y rutinas...
-            </div>
-          ) : exercises.length === 0 ? (
-            <div className="rounded-lg bg-slate-900 px-4 py-4 text-sm text-slate-400">
-              Todavía no agregaste ejercicios.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {exercises.map((exercise, index) => (
-                <div
-                  key={`${exercise.exerciseId}-${index}`}
-                  className="rounded-xl bg-slate-900 p-4"
-                >
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
-                    <div>
-                      {(() => {
-                        const selectedExerciseName = getExerciseName(exercise.exerciseId);
-                        const filteredExercises = getFilteredExercises(index);
-                        const isCreating = isCreatingNewExercise[index];
-                        const newExerciseMuscles = exercise.newExerciseMuscles ?? [];
-                        const muscleTotal = getTotalMusclePercentage(newExerciseMuscles);
+                          return (
+                            <div className="space-y-2">
+                              <label className="mb-2 block text-sm font-semibold text-slate-200">
+                                Ejercicio
+                              </label>
 
-                        return (
-                          <div className="space-y-2">
-                            <label className="mb-2 block text-sm font-semibold text-slate-200">
-                              Ejercicio
-                            </label>
-
-                            {!isCreating ? (
-                              <>
-                                {exercise.exerciseId && openSearchIndex !== index ? (
-                                  <div className="rounded-lg bg-slate-700 px-3 py-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                      <span className="text-white">{selectedExerciseName}</span>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenSearchIndex(index);
-                                          setSearchTerms((prev) => ({ ...prev, [index]: "" }));
-                                        }}
-                                        className="text-sm font-semibold text-lime-400 hover:text-lime-300"
-                                      >
-                                        Cambiar
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <input
-                                      value={searchTerms[index] ?? ""}
-                                      onChange={(e) => {
-                                        setSearchTerms((prev) => ({ ...prev, [index]: e.target.value }));
-                                        setOpenSearchIndex(index);
-                                        updateExercise(index, { exerciseId: "" });
-                                      }}
-                                      onFocus={() => setOpenSearchIndex(index)}
-                                      placeholder="Buscar ejercicio..."
-                                      className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
-                                    />
-
-                                    {openSearchIndex === index ? (
-                                      <div className="max-h-48 overflow-y-auto rounded-lg bg-slate-900">
-                                        {filteredExercises.length > 0 ? (
-                                          filteredExercises.map((availableExercise) => (
-                                            <button
-                                              key={availableExercise.id}
-                                              type="button"
-                                              onClick={() => {
-                                                handleExerciseChange(index, availableExercise.id);
-                                                updateExercise(index, {
-                                                  newExerciseName: "",
-                                                  newExerciseMuscles: [],
-                                                });
-                                                setSearchTerms((prev) => {
-                                                  const next = { ...prev };
-                                                  delete next[index];
-                                                  return next;
-                                                });
-                                                setOpenSearchIndex(null);
-                                              }}
-                                              className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-slate-700"
-                                            >
-                                              {availableExercise.name}
-                                            </button>
-                                          ))
-                                        ) : (
-                                          <div className="px-3 py-2 text-sm text-slate-400">
-                                            No hay coincidencias.
-                                          </div>
-                                        )}
+                              {!isCreating ? (
+                                <>
+                                  {exercise.exerciseId && openSearchIndex !== index ? (
+                                    <div className="rounded-lg bg-slate-700 px-3 py-3">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-white">{selectedExerciseName}</span>
 
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            setIsCreatingNewExercise((prev) => ({
-                                              ...prev,
-                                              [index]: true,
-                                            }));
-                                            updateExercise(index, {
-                                              exerciseId: "__new",
-                                              measureType: "reps",
-                                              reps: "10",
-                                              durationSeconds: "",
-                                              newExerciseName: searchTerms[index] ?? "",
-                                              newExerciseMuscles: [],
-                                            });
-                                            setOpenSearchIndex(null);
+                                            setOpenSearchIndex(index);
+                                            setSearchTerms((prev) => ({ ...prev, [index]: "" }));
                                           }}
-                                          className="block w-full px-3 py-2 text-left text-lime-400 hover:bg-slate-700"
+                                          className="text-sm font-semibold text-lime-400 hover:text-lime-300"
                                         >
-                                          + Crear nuevo ejercicio
+                                          Cambiar
                                         </button>
                                       </div>
-                                    ) : null}
-                                  </>
-                                )}
-                              </>
-                            ) : (
-                              <div className="space-y-3">
-                                <input
-                                  value={exercise.newExerciseName ?? ""}
-                                  onChange={(e) =>
-                                    updateExercise(index, { newExerciseName: e.target.value })
-                                  }
-                                  placeholder="Nombre del nuevo ejercicio"
-                                  className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
-                                />
-
-                                <div className="rounded-xl bg-slate-900 p-3">
-                                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                      <div className="text-sm font-medium text-slate-200">
-                                        Músculos trabajados
-                                      </div>
-                                      <div className="text-xs text-slate-400">
-                                        Total actual: {muscleTotal} / 100
-                                      </div>
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => addNewExerciseMuscle(index)}
-                                      disabled={muscleTotal >= 100}
-                                      className="rounded-md bg-slate-600 px-3 py-2 text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50"
-                                    >
-                                      + Agregar músculo
-                                    </button>
-                                  </div>
-
-                                  {newExerciseMuscles.length === 0 ? (
-                                    <div className="text-sm text-slate-400">
-                                      Agregá al menos un músculo y su porcentaje.
                                     </div>
                                   ) : (
-                                    <div className="space-y-3">
-                                      {newExerciseMuscles.map((item, muscleIndex) => (
-                                        <div
-                                          key={`${index}-${muscleIndex}`}
-                                          className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_120px_90px]"
-                                        >
-                                          <select
-                                            value={item.muscleId}
-                                            onChange={(e) =>
-                                              updateNewExerciseMuscle(
-                                                index,
-                                                muscleIndex,
-                                                "muscleId",
-                                                e.target.value
-                                              )
-                                            }
-                                            className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
-                                          >
-                                            <option value="">Seleccionar músculo</option>
-                                            {availableMuscles.map((muscle) => (
-                                              <option key={muscle.id} value={muscle.id}>
-                                                {muscle.name} ({formatGroupLabel(muscle.groupKey)})
-                                              </option>
-                                            ))}
-                                          </select>
+                                    <>
+                                      <input
+                                        value={searchTerms[index] ?? ""}
+                                        onChange={(e) => {
+                                          setSearchTerms((prev) => ({
+                                            ...prev,
+                                            [index]: e.target.value,
+                                          }));
+                                          setOpenSearchIndex(index);
+                                          updateExercise(index, { exerciseId: "" });
+                                        }}
+                                        onFocus={() => setOpenSearchIndex(index)}
+                                        placeholder="Buscar ejercicio..."
+                                        className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
+                                      />
 
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            max={100}
-                                            value={item.percentage}
-                                            onChange={(e) =>
-                                              updateNewExerciseMuscle(
-                                                index,
-                                                muscleIndex,
-                                                "percentage",
-                                                Number(e.target.value)
-                                              )
-                                            }
-                                            className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
-                                            placeholder="%"
-                                          />
+                                      {openSearchIndex === index ? (
+                                        <div className="max-h-48 overflow-y-auto rounded-lg bg-slate-900">
+                                          {filteredExercises.length > 0 ? (
+                                            filteredExercises.map((availableExercise) => (
+                                              <button
+                                                key={availableExercise.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  handleExerciseChange(index, availableExercise.id);
+                                                  updateExercise(index, {
+                                                    newExerciseName: "",
+                                                    newExerciseMuscles: [],
+                                                  });
+                                                  setSearchTerms((prev) => {
+                                                    const next = { ...prev };
+                                                    delete next[index];
+                                                    return next;
+                                                  });
+                                                  setOpenSearchIndex(null);
+                                                }}
+                                                className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-slate-700"
+                                              >
+                                                {availableExercise.name}
+                                              </button>
+                                            ))
+                                          ) : (
+                                            <div className="px-3 py-2 text-sm text-slate-400">
+                                              No hay coincidencias.
+                                            </div>
+                                          )}
 
                                           <button
                                             type="button"
-                                            onClick={() => removeNewExerciseMuscle(index, muscleIndex)}
-                                            className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
+                                            onClick={() => {
+                                              setIsCreatingNewExercise((prev) => ({
+                                                ...prev,
+                                                [index]: true,
+                                              }));
+                                              updateExercise(index, {
+                                                exerciseId: "__new",
+                                                measureType: "reps",
+                                                reps: "10",
+                                                durationSeconds: "",
+                                                newExerciseName: searchTerms[index] ?? "",
+                                                newExerciseMuscles: [],
+                                              });
+                                              setOpenSearchIndex(null);
+                                            }}
+                                            className="block w-full px-3 py-2 text-left text-lime-400 hover:bg-slate-700"
                                           >
-                                            Quitar
+                                            + Crear nuevo ejercicio
                                           </button>
                                         </div>
-                                      ))}
-                                    </div>
+                                      ) : null}
+                                    </>
                                   )}
+                                </>
+                              ) : (
+                                <div className="space-y-3">
+                                  <input
+                                    value={exercise.newExerciseName ?? ""}
+                                    onChange={(e) =>
+                                      updateExercise(index, { newExerciseName: e.target.value })
+                                    }
+                                    placeholder="Nombre del nuevo ejercicio"
+                                    className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
+                                  />
 
-                                  <div className="mt-3 text-xs text-slate-400">
-                                    La suma total debe ser exactamente 100.
+                                  <div className="rounded-xl bg-slate-900 p-3">
+                                    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                      <div>
+                                        <div className="text-sm font-medium text-slate-200">
+                                          Músculos trabajados
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                          Total actual: {muscleTotal} / 100
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => addNewExerciseMuscle(index)}
+                                        disabled={muscleTotal >= 100}
+                                        className="rounded-md bg-slate-600 px-3 py-2 text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+                                      >
+                                        + Agregar músculo
+                                      </button>
+                                    </div>
+
+                                    {newExerciseMuscles.length === 0 ? (
+                                      <div className="text-sm text-slate-400">
+                                        Agregá al menos un músculo y su porcentaje.
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-3">
+                                        {newExerciseMuscles.map((item, muscleIndex) => (
+                                          <div
+                                            key={`${index}-${muscleIndex}`}
+                                            className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_120px_90px]"
+                                          >
+                                            <select
+                                              value={item.muscleId}
+                                              onChange={(e) =>
+                                                updateNewExerciseMuscle(
+                                                  index,
+                                                  muscleIndex,
+                                                  "muscleId",
+                                                  e.target.value
+                                                )
+                                              }
+                                              className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
+                                            >
+                                              <option value="">Seleccionar músculo</option>
+                                              {availableMuscles.map((muscle) => (
+                                                <option key={muscle.id} value={muscle.id}>
+                                                  {muscle.name} ({formatGroupLabel(muscle.groupKey)})
+                                                </option>
+                                              ))}
+                                            </select>
+
+                                            <input
+                                              type="number"
+                                              min={1}
+                                              max={100}
+                                              value={item.percentage}
+                                              onChange={(e) =>
+                                                updateNewExerciseMuscle(
+                                                  index,
+                                                  muscleIndex,
+                                                  "percentage",
+                                                  Number(e.target.value)
+                                                )
+                                              }
+                                              className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
+                                              placeholder="%"
+                                            />
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                removeNewExerciseMuscle(index, muscleIndex)
+                                              }
+                                              className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
+                                            >
+                                              Quitar
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    <div className="mt-3 text-xs text-slate-400">
+                                      La suma total debe ser exactamente 100.
+                                    </div>
                                   </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCreatingNewExercise((prev) => ({
+                                        ...prev,
+                                        [index]: false,
+                                      }));
+                                      updateExercise(index, {
+                                        exerciseId: "",
+                                        measureType: "reps",
+                                        newExerciseName: "",
+                                        newExerciseMuscles: [],
+                                      });
+                                    }}
+                                    className="text-sm text-slate-400 hover:text-slate-200"
+                                  >
+                                    Cancelar creación
+                                  </button>
                                 </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsCreatingNewExercise((prev) => ({
-                                      ...prev,
-                                      [index]: false,
-                                    }));
-                                    updateExercise(index, {
-                                      exerciseId: "",
-                                      measureType: "reps",
-                                      newExerciseName: "",
-                                      newExerciseMuscles: [],
-                                    });
-                                  }}
-                                  className="text-sm text-slate-400 hover:text-slate-200"
-                                >
-                                  Cancelar creación
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">
-                        Series
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={exercise.sets}
-                        onChange={(e) =>
-                          updateExercise(index, { sets: Number(e.target.value) })
-                        }
-                        className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                      />
-                    </div>
-
-                    {exercise.measureType === "duration" ? (
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-slate-200">
-                          Tiempo (seg)
+                          Series
                         </label>
                         <input
                           type="number"
                           min={1}
                           step={1}
-                          value={exercise.durationSeconds}
+                          value={exercise.sets}
                           onChange={(e) =>
-                            updateExercise(index, { durationSeconds: e.target.value })
+                            updateExercise(index, { sets: Number(e.target.value) })
                           }
                           className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                          placeholder="Ej: 30"
                         />
                       </div>
-                    ) : (
+
+                      {exercise.measureType === "duration" ? (
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-slate-200">
+                            Tiempo (seg)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={exercise.durationSeconds}
+                            onChange={(e) =>
+                              updateExercise(index, { durationSeconds: e.target.value })
+                            }
+                            className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                            placeholder="Ej: 30"
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-slate-200">
+                            Reps
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={exercise.reps}
+                            onChange={(e) => updateExercise(index, { reps: e.target.value })}
+                            className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                          />
+                        </div>
+                      )}
+
                       <div>
                         <label className="mb-2 block text-sm font-semibold text-slate-200">
-                          Reps
+                          Peso (kg)
                         </label>
                         <input
                           type="number"
-                          min={1}
-                          step={1}
-                          value={exercise.reps}
+                          min={0}
+                          step="0.5"
+                          value={exercise.weightKg}
                           onChange={(e) =>
-                            updateExercise(index, { reps: e.target.value })
+                            updateExercise(index, { weightKg: e.target.value })
                           }
                           className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                          placeholder="Opcional"
                         />
                       </div>
-                    )}
 
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">
-                        Peso (kg)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.5"
-                        value={exercise.weightKg}
-                        onChange={(e) =>
-                          updateExercise(index, { weightKg: e.target.value })
-                        }
-                        className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                        placeholder="Opcional"
-                      />
-                    </div>
-
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => removeExercise(index)}
-                        className="inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500 md:w-auto"
-                      >
-                        Quitar
-                      </button>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={() => removeExercise(index)}
+                          className="inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500 md:w-auto"
+                        >
+                          Quitar
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
