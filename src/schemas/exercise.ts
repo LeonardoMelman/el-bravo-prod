@@ -1,8 +1,15 @@
-import { z } from "zod"
+import { z } from "zod";
 
 export const createExerciseSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Exercise name is required")
-    .max(100, "Exercise name is too long")
-})
+  name: z.string().trim().min(1, "El nombre es requerido"),
+  measureType: z.enum(["reps", "duration"]).default("reps"),
+  muscles: z
+    .array(
+      z.object({
+        muscleId: z.string().min(1, "muscleId requerido"),
+        percentage: z.number().positive("percentage debe ser mayor a 0"),
+      })
+    )
+    .optional()
+    .default([]),
+});

@@ -9,6 +9,7 @@ type AvailableExercise = {
   id: string;
   name: string;
   measureType: ExerciseMeasureType;
+  createdByUserId?: string | null;
   muscles?: {
     exerciseId?: string;
     muscleId?: string;
@@ -33,6 +34,10 @@ type ActivityCategory = {
   id: string;
   slug: string;
   name: string;
+};
+
+type CurrentUserResponse = {
+  id: string;
 };
 
 type RoutineExercise = {
@@ -127,6 +132,7 @@ export default function CreateActivityForm() {
   const [isCreatingNewExercise, setIsCreatingNewExercise] = useState<Record<number, boolean>>({});
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
   const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   const [activityCategoryId, setActivityCategoryId] = useState("");
   const [date, setDate] = useState(getDefaultDate());
@@ -152,17 +158,19 @@ export default function CreateActivityForm() {
         setLoadingData(true);
         setError("");
 
-        const [exerciseRes, routineRes, categoryRes, muscleRes] = await Promise.all([
+        const [exerciseRes, routineRes, categoryRes, muscleRes, currentUserRes] = await Promise.all([
           fetch("/api/exercise/list", { cache: "no-store" }),
           fetch("/api/routine/list", { cache: "no-store" }),
           fetch("/api/activity-types/list", { cache: "no-store" }),
           fetch("/api/muscle/list", { cache: "no-store" }),
+          fetch("/api/auth/me", { cache: "no-store" }),
         ]);
 
         const exerciseData = await exerciseRes.json().catch(() => ({}));
         const routineData = await routineRes.json().catch(() => ({}));
         const categoryData = await categoryRes.json().catch(() => ({}));
         const muscleData = await muscleRes.json().catch(() => ({}));
+        const currentUserData = (await currentUserRes.json().catch(() => ({}))) as Partial<CurrentUserResponse>;
 
         if (!exerciseRes.ok) {
           throw new Error(exerciseData?.error || "No se pudieron cargar los ejercicios.");
@@ -180,11 +188,26 @@ export default function CreateActivityForm() {
           throw new Error(muscleData?.error || "No se pudieron cargar los músculos.");
         }
 
-        const loadedExercises = Array.isArray(exerciseData)
+        if (!currentUserRes.ok) {
+          throw new Error("No se pudo identificar al usuario actual.");
+        }
+
+        const resolvedCurrentUserId =
+          typeof currentUserData?.id === "string" ? currentUserData.id : "";
+
+        const rawLoadedExercises = Array.isArray(exerciseData)
           ? exerciseData
           : Array.isArray(exerciseData?.exercises)
           ? exerciseData.exercises
           : [];
+
+        const loadedExercises = rawLoadedExercises.filter((exercise: AvailableExercise) => {
+          if (!exercise.createdByUserId) {
+            return true;
+          }
+
+          return exercise.createdByUserId === resolvedCurrentUserId;
+        });
 
         const loadedRoutines = Array.isArray(routineData)
           ? routineData
@@ -199,6 +222,7 @@ export default function CreateActivityForm() {
           ? muscleData.muscles
           : [];
 
+        setCurrentUserId(resolvedCurrentUserId);
         setAvailableExercises(loadedExercises);
         setAvailableMuscles(loadedMuscles);
         setRoutines(loadedRoutines);
@@ -207,10 +231,15 @@ export default function CreateActivityForm() {
         if (loadedCategories.length > 0) {
           setActivityCategoryId((prev) => prev || loadedCategories[0].id);
         }
-      } catch (err: any) {
-        console.error("Error cargando datos de actividades:", err);
-        setError(err?.message || "Error cargando ejercicios, rutinas y tipos.");
-      } finally {
+      } catch (err: unknown) {
+      console.error("Error cargando datos de actividades:", err);
+
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Error cargando ejercicios, rutinas y tipos.");
+      }
+    } finally {
         setLoadingData(false);
       }
     }
@@ -234,18 +263,18 @@ export default function CreateActivityForm() {
 
   const hasSelectedRoutine = isStrengthActivity && !!selectedRoutineId && !!selectedRoutine;
 
-  useEffect(() => {
+    useEffect(() => {
     if (!isStrengthActivity) {
-      setSelectedRoutineId("");
-      setExercises([]);
-      setUpdateRoutineMessage("");
-      setSearchTerms({});
-      setIsCreatingNewExercise({});
-      if (openSearchIndex !== null) {
+      queueMicrotask(() => {
+        setSelectedRoutineId("");
+        setExercises([]);
+        setUpdateRoutineMessage("");
+        setSearchTerms({});
+        setIsCreatingNewExercise({});
         setOpenSearchIndex(null);
-      }
+      });
     }
-  }, [isStrengthActivity, openSearchIndex]);
+  }, [isStrengthActivity]);
 
   function applyRoutine(routineId: string) {
     setSelectedRoutineId(routineId);
@@ -553,6 +582,10 @@ export default function CreateActivityForm() {
           id: data.id,
           name: data.name ?? newName,
           measureType: "reps",
+          createdByUserId:
+            typeof data.createdByUserId === "string"
+              ? data.createdByUserId
+              : currentUserId || null,
           muscles: Array.isArray(data.muscles) ? data.muscles : [],
         };
 
@@ -943,13 +976,13 @@ export default function CreateActivityForm() {
                 </p>
               </div>
 
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-55">
                 {hasSelectedRoutine ? (
                   <button
                     type="button"
                     onClick={handleUpdateRoutine}
                     disabled={updatingRoutine || saving || loadingData}
-                    className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-linear-to-b from-amber-400 to-orange-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md transition hover:from-amber-300 hover:to-orange-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {updatingRoutine ? "Actualizando..." : "Actualizar rutina"}
                   </button>
@@ -1340,7 +1373,7 @@ export default function CreateActivityForm() {
           <button
             type="submit"
             disabled={saving || loadingData}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-lime-600 to-lime-800 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-linear-to-b from-lime-600 to-lime-800 px-5 py-3 text-center text-sm font-semibold text-white shadow-lg hover:from-lime-500 hover:to-lime-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {saving ? "Guardando..." : "Guardar actividad"}
           </button>

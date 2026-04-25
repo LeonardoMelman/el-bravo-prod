@@ -11,6 +11,12 @@ export async function GET() {
     }
 
     const exercisesRaw = await prisma.exercise.findMany({
+      where: {
+        OR: [
+          { createdByUserId: null },
+          { createdByUserId: user.id },
+        ],
+      },
       orderBy: { name: "asc" },
       include: {
         muscles: {
@@ -25,6 +31,7 @@ export async function GET() {
       id: exercise.id,
       name: exercise.name,
       measureType: exercise.measureType,
+      createdByUserId: exercise.createdByUserId ?? null,
       muscles: Array.isArray(exercise.muscles)
         ? exercise.muscles.map((relation: any) => ({
             id: relation.id,
@@ -41,7 +48,7 @@ export async function GET() {
 
     return NextResponse.json(exercises);
   } catch (error) {
-    console.error(error);
+    console.error("/api/exercise/list error:", error);
     return NextResponse.json(
       { error: "Error obteniendo ejercicios" },
       { status: 500 }

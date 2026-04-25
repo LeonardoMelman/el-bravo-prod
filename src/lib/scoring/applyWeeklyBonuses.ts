@@ -1,16 +1,12 @@
+import { Prisma } from "@prisma/client";
+
+
 type Params = {
-  tx: any;
+  tx: Prisma.TransactionClient;
   seasonId: string;
   userId: string;
   weekStart: Date;
 };
-
-function getWeeklyStreakBonusPoints(streakCount: number) {
-  //if (streakCount >= 6) return 150;
-  //if (streakCount >= 4) return 100;
-  //if (streakCount >= 2) return 50;
-  return 0;
-}
 
 export async function applyWeeklyBonuses({
   tx,
@@ -51,26 +47,6 @@ export async function applyWeeklyBonuses({
     return;
   }
 
-  if (progress.goalReached) {
-    const streakBonusPoints = getWeeklyStreakBonusPoints(progress.streakCount);
-
-    if (streakBonusPoints > 0) {
-      await tx.scoreEvent.create({
-        data: {
-          seasonId,
-          userId,
-          activityId: null,
-          weekStart,
-          type: "weekly_streak_bonus",
-          points: streakBonusPoints,
-          reason: `Bonus por racha activa de ${progress.streakCount} semanas`,
-          metadata: {
-            streakCount: progress.streakCount,
-          },
-        },
-      });
-    }
-  }
 
   if (progress.perfectWeek) {
     await tx.scoreEvent.create({
