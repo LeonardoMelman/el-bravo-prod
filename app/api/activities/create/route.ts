@@ -161,13 +161,6 @@ export async function POST(req: Request) {
       Math.round((e.getTime() - s.getTime()) / (1000 * 60))
     );
 
-    if (!Array.isArray(exercises) || exercises.length === 0) {
-      return NextResponse.json(
-        { error: "At least one exercise is required" },
-        { status: 400 }
-      );
-    }
-
     const normalizedExercises = exercises as CreateActivityExerciseInput[];
 
     for (const item of normalizedExercises) {

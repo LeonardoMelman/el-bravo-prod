@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type ExerciseMeasureType = "reps" | "duration";
 
@@ -8,6 +8,24 @@ type AvailableExercise = {
   id: string;
   name: string;
   measureType: ExerciseMeasureType;
+  muscles?: {
+    exerciseId?: string;
+    muscleId?: string;
+    percentage: number;
+    muscle: {
+      id: string;
+      name: string;
+      slug?: string;
+      groupKey?: string;
+    };
+  }[];
+};
+
+type Muscle = {
+  id: string;
+  name: string;
+  slug?: string;
+  groupKey?: string;
 };
 
 type ActivityCategory = {
@@ -40,6 +58,11 @@ type ActivityExerciseFormItem = {
   reps: string;
   durationSeconds: string;
   weightKg: string;
+  newExerciseName?: string;
+  newExerciseMuscles?: {
+    muscleId: string;
+    percentage: number;
+  }[];
 };
 
 function twoDigits(n: number) {
@@ -75,6 +98,10 @@ function getExerciseMeasureType(
 
 export default function CreateActivityForm() {
   const [availableExercises, setAvailableExercises] = useState<AvailableExercise[]>([]);
+  const [availableMuscles, setAvailableMuscles] = useState<Muscle[]>([]);
+  const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
+  const [openSearchIndex, setOpenSearchIndex] = useState<number | null>(null);
+  const [isCreatingNewExercise, setIsCreatingNewExercise] = useState<Record<number, boolean>>({});
   const [routines, setRoutines] = useState<RoutineItem[]>([]);
   const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
 
@@ -98,15 +125,17 @@ export default function CreateActivityForm() {
         setLoadingData(true);
         setError("");
 
-        const [exerciseRes, routineRes, categoryRes] = await Promise.all([
+        const [exerciseRes, routineRes, categoryRes, muscleRes] = await Promise.all([
           fetch("/api/exercise/list", { cache: "no-store" }),
           fetch("/api/routine/list", { cache: "no-store" }),
           fetch("/api/activity-types/list", { cache: "no-store" }),
+          fetch("/api/muscle/list", { cache: "no-store" }),
         ]);
 
         const exerciseData = await exerciseRes.json().catch(() => ({}));
         const routineData = await routineRes.json().catch(() => ({}));
         const categoryData = await categoryRes.json().catch(() => ({}));
+        const muscleData = await muscleRes.json().catch(() => ({}));
 
         if (!exerciseRes.ok) {
           throw new Error(exerciseData?.error || "No se pudieron cargar los ejercicios.");
@@ -118,6 +147,10 @@ export default function CreateActivityForm() {
 
         if (!categoryRes.ok) {
           throw new Error(categoryData?.error || "No se pudieron cargar los tipos.");
+        }
+
+        if (!muscleRes.ok) {
+          throw new Error(muscleData?.error || "No se pudieron cargar los músculos.");
         }
 
         const loadedExercises = Array.isArray(exerciseData)
@@ -133,8 +166,14 @@ export default function CreateActivityForm() {
           : [];
 
         const loadedCategories = Array.isArray(categoryData) ? categoryData : [];
+        const loadedMuscles = Array.isArray(muscleData)
+          ? muscleData
+          : Array.isArray(muscleData?.muscles)
+          ? muscleData.muscles
+          : [];
 
         setAvailableExercises(loadedExercises);
+        setAvailableMuscles(loadedMuscles);
         setRoutines(loadedRoutines);
         setActivityCategories(loadedCategories);
 
@@ -187,6 +226,8 @@ export default function CreateActivityForm() {
         exercise.weightKg !== null && exercise.weightKg !== undefined
           ? String(exercise.weightKg)
           : "",
+      newExerciseName: "",
+      newExerciseMuscles: [],
     }));
 
     setExercises(mapped);
@@ -204,6 +245,8 @@ export default function CreateActivityForm() {
         reps: "10",
         durationSeconds: "",
         weightKg: "",
+        newExerciseName: "",
+        newExerciseMuscles: [],
       },
     ]);
   }
@@ -231,11 +274,253 @@ export default function CreateActivityForm() {
     setError("");
     setUpdateRoutineMessage("");
     setExercises((prev) => prev.filter((_, i) => i !== index));
+    setSearchTerms((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    setIsCreatingNewExercise((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+
+    if (openSearchIndex === index) {
+      setOpenSearchIndex(null);
+    }
   }
 
-  function validateExercisesForSave() {
 
-    for (const exercise of exercises) {
+  function getExerciseName(exerciseId?: string) {
+    if (!exerciseId || exerciseId === "__new") return "";
+    return availableExercises.find((exercise) => exercise.id === exerciseId)?.name ?? "";
+  }
+
+  function getFilteredExercises(index: number) {
+    const term = (searchTerms[index] ?? "").toLowerCase().trim();
+
+    if (!term) return availableExercises.slice(0, 8);
+
+    return availableExercises
+      .filter((exercise) => exercise.name.toLowerCase().includes(term))
+      .slice(0, 8);
+  }
+
+  function formatGroupLabel(groupKey?: string) {
+    switch (groupKey) {
+      case "legs":
+        return "Piernas";
+      case "core":
+        return "Core";
+      case "chest":
+        return "Pecho";
+      case "back":
+        return "Espalda";
+      case "arms":
+        return "Brazos";
+      case "shoulders":
+        return "Hombros";
+      case "glutes":
+        return "Glúteos";
+      default:
+        return groupKey || "Otros";
+    }
+  }
+
+  function getTotalMusclePercentage(
+    muscles: { muscleId: string; percentage: number }[] | undefined
+  ) {
+    return (muscles ?? []).reduce((sum, item) => sum + (Number(item.percentage) || 0), 0);
+  }
+
+  function addNewExerciseMuscle(index: number) {
+    const current = exercises[index]?.newExerciseMuscles ?? [];
+    const total = getTotalMusclePercentage(current);
+
+    if (total >= 100) return;
+
+    setExercises((prev) =>
+      prev.map((exercise, i) =>
+        i === index
+          ? {
+              ...exercise,
+              newExerciseMuscles: [
+                ...(exercise.newExerciseMuscles ?? []),
+                { muscleId: "", percentage: 0 },
+              ],
+            }
+          : exercise
+      )
+    );
+  }
+
+  function updateNewExerciseMuscle(
+    exerciseIndex: number,
+    muscleIndex: number,
+    field: "muscleId" | "percentage",
+    value: string | number
+  ) {
+    setExercises((prev) =>
+      prev.map((exercise, i) => {
+        if (i !== exerciseIndex) return exercise;
+
+        const nextMuscles = [...(exercise.newExerciseMuscles ?? [])];
+        const current = nextMuscles[muscleIndex];
+
+        if (!current) return exercise;
+
+        if (field === "percentage") {
+          const numericValue = Number(value) || 0;
+          const otherTotal = nextMuscles.reduce((sum, item, idx) => {
+            if (idx === muscleIndex) return sum;
+            return sum + (Number(item.percentage) || 0);
+          }, 0);
+
+          nextMuscles[muscleIndex] = {
+            ...current,
+            percentage: Math.max(0, Math.min(100 - otherTotal, numericValue)),
+          };
+        } else {
+          nextMuscles[muscleIndex] = {
+            ...current,
+            muscleId: String(value),
+          };
+        }
+
+        return {
+          ...exercise,
+          newExerciseMuscles: nextMuscles,
+        };
+      })
+    );
+  }
+
+  function removeNewExerciseMuscle(exerciseIndex: number, muscleIndex: number) {
+    setExercises((prev) =>
+      prev.map((exercise, i) =>
+        i === exerciseIndex
+          ? {
+              ...exercise,
+              newExerciseMuscles: (exercise.newExerciseMuscles ?? []).filter(
+                (_, idx) => idx !== muscleIndex
+              ),
+            }
+          : exercise
+      )
+    );
+  }
+
+  function validateNewExerciseMuscles(
+    newExerciseMuscles: { muscleId: string; percentage: number }[]
+  ) {
+    if (newExerciseMuscles.length === 0) {
+      return "Tenés que definir al menos un músculo para el nuevo ejercicio.";
+    }
+
+    const usedMuscles = new Set<string>();
+    let total = 0;
+
+    for (const item of newExerciseMuscles) {
+      if (!item.muscleId) {
+        return "Todos los músculos del nuevo ejercicio deben estar seleccionados.";
+      }
+
+      if (usedMuscles.has(item.muscleId)) {
+        return "No podés repetir el mismo músculo en el nuevo ejercicio.";
+      }
+
+      usedMuscles.add(item.muscleId);
+
+      if (!Number.isFinite(item.percentage) || item.percentage <= 0) {
+        return "Todos los porcentajes del nuevo ejercicio deben ser mayores a 0.";
+      }
+
+      total += item.percentage;
+    }
+
+    if (total !== 100) {
+      return "Los porcentajes del nuevo ejercicio deben sumar exactamente 100.";
+    }
+
+    return null;
+  }
+
+  async function createNewExercisesIfNeeded(items: ActivityExerciseFormItem[]) {
+    const finalExercises = [...items];
+
+    for (let i = 0; i < finalExercises.length; i++) {
+      const current = finalExercises[i];
+
+      if (!current.exerciseId && !current.newExerciseName?.trim()) {
+        setError("Cada bloque debe tener un ejercicio seleccionado o creado.");
+        return null;
+      }
+
+      if (
+        current.exerciseId === "__new" ||
+        (!current.exerciseId && current.newExerciseName)
+      ) {
+        const newName = current.newExerciseName?.trim();
+
+        if (!newName) {
+          setError("El nombre del nuevo ejercicio es requerido.");
+          return null;
+        }
+
+        const newExerciseMuscles = current.newExerciseMuscles ?? [];
+        const muscleValidationError = validateNewExerciseMuscles(newExerciseMuscles);
+
+        if (muscleValidationError) {
+          setError(muscleValidationError);
+          return null;
+        }
+
+        const res = await fetch("/api/exercise/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newName,
+            muscles: newExerciseMuscles,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          setError(data?.error || "Error creando ejercicio");
+          return null;
+        }
+
+        const createdExercise: AvailableExercise = {
+          id: data.id,
+          name: data.name ?? newName,
+          measureType: "reps",
+          muscles: Array.isArray(data.muscles) ? data.muscles : [],
+        };
+
+        setAvailableExercises((prev) => {
+          if (prev.some((exercise) => exercise.id === createdExercise.id)) return prev;
+          return [...prev, createdExercise];
+        });
+
+        finalExercises[i] = {
+          ...current,
+          exerciseId: data.id,
+          measureType: "reps",
+          newExerciseName: "",
+          newExerciseMuscles: [],
+        };
+      }
+    }
+
+    setExercises(finalExercises);
+
+    return finalExercises;
+  }
+
+  function validateExercisesForSave(items = exercises) {
+
+    for (const exercise of items) {
       if (!exercise.exerciseId) {
         return "Todos los ejercicios deben estar seleccionados.";
       }
@@ -267,8 +552,8 @@ export default function CreateActivityForm() {
     return null;
   }
 
-  function normalizeExercisesPayload() {
-    return exercises.map((exercise) => ({
+  function normalizeExercisesPayload(items = exercises) {
+    return items.map((exercise) => ({
       exerciseId: exercise.exerciseId,
       sets: Number(exercise.sets),
       reps:
@@ -289,15 +574,23 @@ export default function CreateActivityForm() {
 
     if (!selectedRoutine) return;
 
-    const validationError = validateExercisesForSave();
-    if (validationError) {
-      setUpdateRoutineMessage(validationError);
+    setUpdatingRoutine(true);
+
+    const finalExercises = await createNewExercisesIfNeeded(exercises);
+
+    if (!finalExercises) {
+      setUpdatingRoutine(false);
       return;
     }
 
-    const normalizedExercises = normalizeExercisesPayload();
+    const validationError = validateExercisesForSave(finalExercises);
+    if (validationError) {
+      setUpdateRoutineMessage(validationError);
+      setUpdatingRoutine(false);
+      return;
+    }
 
-    setUpdatingRoutine(true);
+    const normalizedExercises = normalizeExercisesPayload(finalExercises);
 
     try {
       const res = await fetch(`/api/routine/${selectedRoutine.id}`, {
@@ -374,7 +667,13 @@ export default function CreateActivityForm() {
       return;
     }
 
-    const validationError = validateExercisesForSave();
+    const finalExercises = await createNewExercisesIfNeeded(exercises);
+
+    if (!finalExercises) {
+      return;
+    }
+
+    const validationError = validateExercisesForSave(finalExercises);
     if (validationError) {
       setError(validationError);
       return;
@@ -398,7 +697,7 @@ export default function CreateActivityForm() {
         activityCategoryId,
         notes: notes.trim() || null,
         routineId: selectedRoutineId || null,
-        exercises: normalizeExercisesPayload(),
+        exercises: normalizeExercisesPayload(finalExercises),
       };
 
       const res = await fetch("/api/activities/create", {
@@ -593,21 +892,229 @@ export default function CreateActivityForm() {
                 >
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-200">
-                        Ejercicio
-                      </label>
-                      <select
-                        value={exercise.exerciseId}
-                        onChange={(e) => handleExerciseChange(index, e.target.value)}
-                        className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                      >
-                        <option value="">Seleccionar ejercicio</option>
-                        {availableExercises.map((availableExercise) => (
-                          <option key={availableExercise.id} value={availableExercise.id}>
-                            {availableExercise.name}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const selectedExerciseName = getExerciseName(exercise.exerciseId);
+                        const filteredExercises = getFilteredExercises(index);
+                        const isCreating = isCreatingNewExercise[index];
+                        const newExerciseMuscles = exercise.newExerciseMuscles ?? [];
+                        const muscleTotal = getTotalMusclePercentage(newExerciseMuscles);
+
+                        return (
+                          <div className="space-y-2">
+                            <label className="mb-2 block text-sm font-semibold text-slate-200">
+                              Ejercicio
+                            </label>
+
+                            {!isCreating ? (
+                              <>
+                                {exercise.exerciseId && openSearchIndex !== index ? (
+                                  <div className="rounded-lg bg-slate-700 px-3 py-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="text-white">{selectedExerciseName}</span>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenSearchIndex(index);
+                                          setSearchTerms((prev) => ({ ...prev, [index]: "" }));
+                                        }}
+                                        className="text-sm font-semibold text-lime-400 hover:text-lime-300"
+                                      >
+                                        Cambiar
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <input
+                                      value={searchTerms[index] ?? ""}
+                                      onChange={(e) => {
+                                        setSearchTerms((prev) => ({ ...prev, [index]: e.target.value }));
+                                        setOpenSearchIndex(index);
+                                        updateExercise(index, { exerciseId: "" });
+                                      }}
+                                      onFocus={() => setOpenSearchIndex(index)}
+                                      placeholder="Buscar ejercicio..."
+                                      className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
+                                    />
+
+                                    {openSearchIndex === index ? (
+                                      <div className="max-h-48 overflow-y-auto rounded-lg bg-slate-900">
+                                        {filteredExercises.length > 0 ? (
+                                          filteredExercises.map((availableExercise) => (
+                                            <button
+                                              key={availableExercise.id}
+                                              type="button"
+                                              onClick={() => {
+                                                handleExerciseChange(index, availableExercise.id);
+                                                updateExercise(index, {
+                                                  newExerciseName: "",
+                                                  newExerciseMuscles: [],
+                                                });
+                                                setSearchTerms((prev) => {
+                                                  const next = { ...prev };
+                                                  delete next[index];
+                                                  return next;
+                                                });
+                                                setOpenSearchIndex(null);
+                                              }}
+                                              className="block w-full px-3 py-2 text-left text-slate-100 hover:bg-slate-700"
+                                            >
+                                              {availableExercise.name}
+                                            </button>
+                                          ))
+                                        ) : (
+                                          <div className="px-3 py-2 text-sm text-slate-400">
+                                            No hay coincidencias.
+                                          </div>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setIsCreatingNewExercise((prev) => ({
+                                              ...prev,
+                                              [index]: true,
+                                            }));
+                                            updateExercise(index, {
+                                              exerciseId: "__new",
+                                              measureType: "reps",
+                                              reps: "10",
+                                              durationSeconds: "",
+                                              newExerciseName: searchTerms[index] ?? "",
+                                              newExerciseMuscles: [],
+                                            });
+                                            setOpenSearchIndex(null);
+                                          }}
+                                          className="block w-full px-3 py-2 text-left text-lime-400 hover:bg-slate-700"
+                                        >
+                                          + Crear nuevo ejercicio
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <div className="space-y-3">
+                                <input
+                                  value={exercise.newExerciseName ?? ""}
+                                  onChange={(e) =>
+                                    updateExercise(index, { newExerciseName: e.target.value })
+                                  }
+                                  placeholder="Nombre del nuevo ejercicio"
+                                  className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none placeholder:text-slate-400"
+                                />
+
+                                <div className="rounded-xl bg-slate-900 p-3">
+                                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                      <div className="text-sm font-medium text-slate-200">
+                                        Músculos trabajados
+                                      </div>
+                                      <div className="text-xs text-slate-400">
+                                        Total actual: {muscleTotal} / 100
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => addNewExerciseMuscle(index)}
+                                      disabled={muscleTotal >= 100}
+                                      className="rounded-md bg-slate-600 px-3 py-2 text-xs font-medium text-white hover:bg-slate-500 disabled:opacity-50"
+                                    >
+                                      + Agregar músculo
+                                    </button>
+                                  </div>
+
+                                  {newExerciseMuscles.length === 0 ? (
+                                    <div className="text-sm text-slate-400">
+                                      Agregá al menos un músculo y su porcentaje.
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {newExerciseMuscles.map((item, muscleIndex) => (
+                                        <div
+                                          key={`${index}-${muscleIndex}`}
+                                          className="grid grid-cols-1 gap-3 md:grid-cols-[1.5fr_120px_90px]"
+                                        >
+                                          <select
+                                            value={item.muscleId}
+                                            onChange={(e) =>
+                                              updateNewExerciseMuscle(
+                                                index,
+                                                muscleIndex,
+                                                "muscleId",
+                                                e.target.value
+                                              )
+                                            }
+                                            className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
+                                          >
+                                            <option value="">Seleccionar músculo</option>
+                                            {availableMuscles.map((muscle) => (
+                                              <option key={muscle.id} value={muscle.id}>
+                                                {muscle.name} ({formatGroupLabel(muscle.groupKey)})
+                                              </option>
+                                            ))}
+                                          </select>
+
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            value={item.percentage}
+                                            onChange={(e) =>
+                                              updateNewExerciseMuscle(
+                                                index,
+                                                muscleIndex,
+                                                "percentage",
+                                                Number(e.target.value)
+                                              )
+                                            }
+                                            className="rounded-lg bg-slate-800 px-3 py-2 text-white outline-none"
+                                            placeholder="%"
+                                          />
+
+                                          <button
+                                            type="button"
+                                            onClick={() => removeNewExerciseMuscle(index, muscleIndex)}
+                                            className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
+                                          >
+                                            Quitar
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div className="mt-3 text-xs text-slate-400">
+                                    La suma total debe ser exactamente 100.
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsCreatingNewExercise((prev) => ({
+                                      ...prev,
+                                      [index]: false,
+                                    }));
+                                    updateExercise(index, {
+                                      exerciseId: "",
+                                      measureType: "reps",
+                                      newExerciseName: "",
+                                      newExerciseMuscles: [],
+                                    });
+                                  }}
+                                  className="text-sm text-slate-400 hover:text-slate-200"
+                                >
+                                  Cancelar creación
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div>
