@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/src/lib/currentUser"
 import JoinGroupModal from "@/src/components/JoinGroupModal";
 import ThemeSelectorHome from "@/src/components/ThemeSelectorHome";
+import ChangelogModal from "@/src/components/ChangelogModal";
 import { prisma } from "@/src/lib/db";
 
 const gymQuotes = [
@@ -484,6 +485,9 @@ export default async function HomePage() {
             &ldquo;{motivationalQuote.quote}&rdquo;
           </blockquote>
           <p className="mt-1 text-xs text-slate-600">— {motivationalQuote.author}</p>
+          <div className="mt-4 flex justify-center">
+            <ChangelogModal />
+          </div>
         </div>
 
         <ThemeSelectorHome position="bottom" />
