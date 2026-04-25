@@ -234,9 +234,6 @@ export default function CreateActivityForm() {
   }
 
   function validateExercisesForSave() {
-    if (exercises.length === 0) {
-      return "Carga por lo menos un ejercicio para guardar tu actividad.";
-    }
 
     for (const exercise of exercises) {
       if (!exercise.exerciseId) {

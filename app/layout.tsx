@@ -17,7 +17,7 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         {/* Anti-flash: apply stored theme before React hydrates to avoid color flicker */}
         <script
