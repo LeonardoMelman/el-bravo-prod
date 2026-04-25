@@ -73,13 +73,14 @@ model User {
   updatedAt DateTime? @updatedAt
 
   // Relations
-  groupMembers       GroupMember[]
-  seasonMembers      SeasonMember[]
-  activities         Activity[]
-  routines           Routine[]
-  scoreEvents        ScoreEvent[]
-  seasonWeekProgress SeasonWeekProgress[]
-  awardsEarned       AwardEarned[]
+  groupMembers        GroupMember[]
+  seasonMembers       SeasonMember[]
+  activities          Activity[]
+  routines            Routine[]
+  scoreEvents         ScoreEvent[]
+  seasonWeekProgress  SeasonWeekProgress[]
+  awardsEarned        AwardEarned[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("user")
 }
@@ -480,4 +481,18 @@ model AwardEarned {
   @@index([seasonId, userId])
   @@index([activityId])
   @@map("awardearned")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passwordresettoken")
 }
