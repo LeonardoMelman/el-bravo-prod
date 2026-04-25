@@ -21,6 +21,7 @@ export default async function RootLayout({
       <head>
         {/* Anti-flash: apply stored theme before React hydrates to avoid color flicker */}
         <script
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('elbravo-theme');document.documentElement.setAttribute('data-theme',t==='manu'?'manu':'leo');}catch(e){}})();`,
           }}
