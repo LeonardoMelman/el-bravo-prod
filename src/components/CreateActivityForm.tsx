@@ -56,7 +56,8 @@ type ActivityExerciseFormItem = {
   measureType: ExerciseMeasureType;
   sets: number;
   reps: string;
-  durationSeconds: string;
+  durationMinutesPart: string;
+  durationSecondsPart: string;
   weightKg: string;
   newExerciseName?: string;
   newExerciseMuscles?: {
@@ -94,6 +95,27 @@ function getExerciseMeasureType(
     availableExercises.find((exercise) => exercise.id === exerciseId)?.measureType ??
     "reps"
   );
+}
+
+function splitDurationSeconds(totalSeconds?: number | null) {
+  const safeTotal = Math.max(0, Number(totalSeconds) || 0);
+  const minutes = Math.floor(safeTotal / 60);
+  const seconds = safeTotal % 60;
+
+  return {
+    minutes: String(minutes),
+    seconds: String(seconds),
+  };
+}
+
+function getTotalDurationSeconds(item: Pick<ActivityExerciseFormItem, "durationMinutesPart" | "durationSecondsPart">) {
+  const minutes = Number(item.durationMinutesPart || "0");
+  const seconds = Number(item.durationSecondsPart || "0");
+
+  const safeMinutes = Number.isFinite(minutes) && minutes >= 0 ? Math.floor(minutes) : 0;
+  const safeSeconds = Number.isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : 0;
+
+  return safeMinutes * 60 + safeSeconds;
 }
 
 export default function CreateActivityForm() {
@@ -196,11 +218,8 @@ export default function CreateActivityForm() {
     [routines, selectedRoutineId]
   );
 
-  const hasSelectedRoutine = !!selectedRoutineId && !!selectedRoutine;
-
   const selectedActivityCategory = useMemo(
-    () =>
-      activityCategories.find((category) => category.id === activityCategoryId) ?? null,
+    () => activityCategories.find((category) => category.id === activityCategoryId) ?? null,
     [activityCategories, activityCategoryId]
   );
 
@@ -208,16 +227,20 @@ export default function CreateActivityForm() {
     selectedActivityCategory?.slug === "strength" ||
     selectedActivityCategory?.name?.toLowerCase() === "fuerza";
 
+  const hasSelectedRoutine = isStrengthActivity && !!selectedRoutineId && !!selectedRoutine;
+
   useEffect(() => {
     if (!isStrengthActivity) {
       setSelectedRoutineId("");
       setExercises([]);
       setUpdateRoutineMessage("");
       setSearchTerms({});
-      setOpenSearchIndex(null);
       setIsCreatingNewExercise({});
+      if (openSearchIndex !== null) {
+        setOpenSearchIndex(null);
+      }
     }
-  }, [isStrengthActivity]);
+  }, [isStrengthActivity, openSearchIndex]);
 
   function applyRoutine(routineId: string) {
     setSelectedRoutineId(routineId);
@@ -231,25 +254,33 @@ export default function CreateActivityForm() {
       return;
     }
 
-    const mapped = routine.exercises.map((exercise) => ({
-      exerciseId: exercise.exerciseId,
-      measureType: exercise.measureType ?? "reps",
-      sets: Number(exercise.sets ?? 3),
-      reps:
-        exercise.reps !== null && exercise.reps !== undefined
-          ? String(exercise.reps)
-          : "",
-      durationSeconds:
-        exercise.durationSeconds !== null && exercise.durationSeconds !== undefined
-          ? String(exercise.durationSeconds)
-          : "",
-      weightKg:
-        exercise.weightKg !== null && exercise.weightKg !== undefined
-          ? String(exercise.weightKg)
-          : "",
-      newExerciseName: "",
-      newExerciseMuscles: [],
-    }));
+    const mapped = routine.exercises.map((exercise) => {
+      const splitDuration = splitDurationSeconds(exercise.durationSeconds);
+
+      return {
+        exerciseId: exercise.exerciseId,
+        measureType: exercise.measureType ?? "reps",
+        sets: Number(exercise.sets ?? 3),
+        reps:
+          exercise.reps !== null && exercise.reps !== undefined
+            ? String(exercise.reps)
+            : "",
+        durationMinutesPart:
+          exercise.durationSeconds !== null && exercise.durationSeconds !== undefined
+            ? splitDuration.minutes
+            : "",
+        durationSecondsPart:
+          exercise.durationSeconds !== null && exercise.durationSeconds !== undefined
+            ? splitDuration.seconds
+            : "",
+        weightKg:
+          exercise.weightKg !== null && exercise.weightKg !== undefined
+            ? String(exercise.weightKg)
+            : "",
+        newExerciseName: "",
+        newExerciseMuscles: [],
+      };
+    });
 
     setExercises(mapped);
   }
@@ -264,7 +295,8 @@ export default function CreateActivityForm() {
         measureType: "reps",
         sets: 3,
         reps: "10",
-        durationSeconds: "",
+        durationMinutesPart: "",
+        durationSecondsPart: "",
         weightKg: "",
         newExerciseName: "",
         newExerciseMuscles: [],
@@ -287,7 +319,8 @@ export default function CreateActivityForm() {
       exerciseId,
       measureType,
       reps: measureType === "reps" ? "10" : "",
-      durationSeconds: measureType === "duration" ? "30" : "",
+      durationMinutesPart: measureType === "duration" ? "0" : "",
+      durationSecondsPart: measureType === "duration" ? "30" : "",
     });
   }
 
@@ -529,6 +562,8 @@ export default function CreateActivityForm() {
           measureType: "reps",
           newExerciseName: "",
           newExerciseMuscles: [],
+          durationMinutesPart: "",
+          durationSecondsPart: "",
         };
       }
     }
@@ -555,8 +590,27 @@ export default function CreateActivityForm() {
       }
 
       if (exercise.measureType === "duration") {
-        if (!exercise.durationSeconds || Number(exercise.durationSeconds) <= 0) {
+        const totalDurationSeconds = getTotalDurationSeconds(exercise);
+
+        if (totalDurationSeconds <= 0) {
           return "Todos los ejercicios por tiempo deben tener una duración mayor a 0.";
+        }
+
+        if (
+          exercise.durationMinutesPart.trim() !== "" &&
+          (!Number.isFinite(Number(exercise.durationMinutesPart)) ||
+            Number(exercise.durationMinutesPart) < 0)
+        ) {
+          return "Los minutos del ejercicio deben ser un número válido mayor o igual a 0.";
+        }
+
+        if (
+          exercise.durationSecondsPart.trim() !== "" &&
+          (!Number.isFinite(Number(exercise.durationSecondsPart)) ||
+            Number(exercise.durationSecondsPart) < 0 ||
+            Number(exercise.durationSecondsPart) > 59)
+        ) {
+          return "Los segundos del ejercicio deben estar entre 0 y 59.";
         }
       }
 
@@ -580,8 +634,8 @@ export default function CreateActivityForm() {
           ? Number(exercise.reps)
           : null,
       durationSeconds:
-        exercise.measureType === "duration" && exercise.durationSeconds.trim() !== ""
-          ? Number(exercise.durationSeconds)
+        exercise.measureType === "duration"
+          ? getTotalDurationSeconds(exercise)
           : null,
       weightKg: exercise.weightKg.trim() === "" ? null : Number(exercise.weightKg),
     }));
@@ -918,7 +972,7 @@ export default function CreateActivityForm() {
                     key={`${exercise.exerciseId}-${index}`}
                     className="rounded-xl bg-slate-900 p-4"
                   >
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr_1.4fr_1fr_auto]">
                       <div>
                         {(() => {
                           const selectedExerciseName = getExerciseName(exercise.exerciseId);
@@ -1011,7 +1065,8 @@ export default function CreateActivityForm() {
                                                 exerciseId: "__new",
                                                 measureType: "reps",
                                                 reps: "10",
-                                                durationSeconds: "",
+                                                durationMinutesPart: "",
+                                                durationSecondsPart: "",
                                                 newExerciseName: searchTerms[index] ?? "",
                                                 newExerciseMuscles: [],
                                               });
@@ -1137,6 +1192,8 @@ export default function CreateActivityForm() {
                                         measureType: "reps",
                                         newExerciseName: "",
                                         newExerciseMuscles: [],
+                                        durationMinutesPart: "",
+                                        durationSecondsPart: "",
                                       });
                                     }}
                                     className="text-sm text-slate-400 hover:text-slate-200"
@@ -1169,19 +1226,39 @@ export default function CreateActivityForm() {
                       {exercise.measureType === "duration" ? (
                         <div>
                           <label className="mb-2 block text-sm font-semibold text-slate-200">
-                            Tiempo (seg)
+                            Tiempo (min : seg)
                           </label>
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={exercise.durationSeconds}
-                            onChange={(e) =>
-                              updateExercise(index, { durationSeconds: e.target.value })
-                            }
-                            className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
-                            placeholder="Ej: 30"
-                          />
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={exercise.durationMinutesPart}
+                              onChange={(e) =>
+                                updateExercise(index, {
+                                  durationMinutesPart: e.target.value,
+                                })
+                              }
+                              className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                              placeholder="Min"
+                            />
+
+                            <input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={1}
+                              value={exercise.durationSecondsPart}
+                              onChange={(e) =>
+                                updateExercise(index, {
+                                  durationSecondsPart: e.target.value,
+                                })
+                              }
+                              className="w-full rounded-lg bg-slate-700 px-3 py-3 text-white outline-none"
+                              placeholder="Seg"
+                            />
+                          </div>
                         </div>
                       ) : (
                         <div>

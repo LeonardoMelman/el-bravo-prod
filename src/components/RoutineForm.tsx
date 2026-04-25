@@ -20,6 +20,11 @@ export type RoutineExerciseInput = {
   }[];
 };
 
+type ExerciseFormItem = RoutineExerciseInput & {
+  durationMinutesPart?: number | null;
+  durationSecondsPart?: number | null;
+};
+
 type Exercise = {
   id: string;
   name: string;
@@ -91,6 +96,31 @@ function getExerciseMeasureType(
   );
 }
 
+function splitDurationSeconds(totalSeconds?: number | null) {
+  const safeTotal = Math.max(0, Number(totalSeconds) || 0);
+  return {
+    minutes: Math.floor(safeTotal / 60),
+    seconds: safeTotal % 60,
+  };
+}
+
+function buildDurationSeconds(
+  minutesPart?: number | null,
+  secondsPart?: number | null
+) {
+  const minutes =
+    Number.isFinite(Number(minutesPart)) && Number(minutesPart) >= 0
+      ? Math.floor(Number(minutesPart))
+      : 0;
+
+  const seconds =
+    Number.isFinite(Number(secondsPart)) && Number(secondsPart) >= 0
+      ? Math.floor(Number(secondsPart))
+      : 0;
+
+  return minutes * 60 + seconds;
+}
+
 export default function RoutineForm({
   mode,
   routineId,
@@ -101,17 +131,25 @@ export default function RoutineForm({
   const isEdit = mode === "edit";
 
   const [name, setName] = useState<string>(initialName);
-  const [exercises, setExercises] = useState<RoutineExerciseInput[]>(
+  const [exercises, setExercises] = useState<ExerciseFormItem[]>(
     initialExercises.length > 0
-      ? initialExercises.map((item) => ({
-          ...item,
-          measureType: item.measureType ?? "reps",
-          reps: item.reps ?? null,
-          durationSeconds: item.durationSeconds ?? null,
-          weightKg: item.weightKg ?? null,
-          newExerciseName: item.newExerciseName ?? "",
-          newExerciseMuscles: item.newExerciseMuscles ?? [],
-        }))
+      ? initialExercises.map((item) => {
+          const split = splitDurationSeconds(item.durationSeconds);
+
+          return {
+            ...item,
+            measureType: item.measureType ?? "reps",
+            reps: item.reps ?? null,
+            durationSeconds: item.durationSeconds ?? null,
+            durationMinutesPart:
+              (item.measureType ?? "reps") === "duration" ? split.minutes : null,
+            durationSecondsPart:
+              (item.measureType ?? "reps") === "duration" ? split.seconds : null,
+            weightKg: item.weightKg ?? null,
+            newExerciseName: item.newExerciseName ?? "",
+            newExerciseMuscles: item.newExerciseMuscles ?? [],
+          };
+        })
       : []
   );
 
@@ -174,6 +212,8 @@ export default function RoutineForm({
         sets: 3,
         reps: 10,
         durationSeconds: null,
+        durationMinutesPart: null,
+        durationSecondsPart: null,
         weightKg: null,
         newExerciseName: "",
         newExerciseMuscles: [],
@@ -183,13 +223,13 @@ export default function RoutineForm({
 
   function updateExercise(
     index: number,
-    field: keyof RoutineExerciseInput,
+    field: keyof ExerciseFormItem,
     value:
       | string
       | number
       | null
       | undefined
-      | RoutineExerciseInput["newExerciseMuscles"]
+      | ExerciseFormItem["newExerciseMuscles"]
       | ExerciseMeasureType
   ) {
     setExercises((prev) =>
@@ -208,8 +248,15 @@ export default function RoutineForm({
               exerciseId,
               measureType,
               reps: measureType === "reps" ? ex.reps ?? 10 : null,
-              durationSeconds:
-                measureType === "duration" ? ex.durationSeconds ?? 30 : null,
+              durationSeconds: measureType === "duration" ? ex.durationSeconds ?? 30 : null,
+              durationMinutesPart:
+                measureType === "duration"
+                  ? ex.durationMinutesPart ?? splitDurationSeconds(ex.durationSeconds ?? 30).minutes
+                  : null,
+              durationSecondsPart:
+                measureType === "duration"
+                  ? ex.durationSecondsPart ?? splitDurationSeconds(ex.durationSeconds ?? 30).seconds
+                  : null,
             }
           : ex
       )
@@ -472,6 +519,8 @@ export default function RoutineForm({
           measureType: "reps",
           newExerciseName: undefined,
           newExerciseMuscles: undefined,
+          durationMinutesPart: null,
+          durationSecondsPart: null,
         };
 
         setAvailableExercises((prev) => [
@@ -514,15 +563,17 @@ export default function RoutineForm({
       }
 
       if (currentMeasureType === "duration") {
-        if (
-          current.durationSeconds === null ||
-          current.durationSeconds === undefined ||
-          !Number.isFinite(current.durationSeconds) ||
-          current.durationSeconds <= 0
-        ) {
+        const totalDurationSeconds = buildDurationSeconds(
+          current.durationMinutesPart,
+          current.durationSecondsPart
+        );
+
+        if (totalDurationSeconds <= 0) {
           setError("Todos los ejercicios por tiempo deben tener un tiempo mayor a 0.");
           return;
         }
+
+        current.durationSeconds = totalDurationSeconds;
       }
 
       if (
@@ -551,14 +602,19 @@ export default function RoutineForm({
               item.measureType ??
               getExerciseMeasureType(item.exerciseId, availableExercises);
 
+            const normalizedDurationSeconds =
+              currentMeasureType === "duration"
+                ? buildDurationSeconds(
+                    item.durationMinutesPart,
+                    item.durationSecondsPart
+                  )
+                : null;
+
             return {
               exerciseId: item.exerciseId,
               sets: item.sets,
               reps: currentMeasureType === "reps" ? item.reps ?? null : null,
-              durationSeconds:
-                currentMeasureType === "duration"
-                  ? item.durationSeconds ?? null
-                  : null,
+              durationSeconds: normalizedDurationSeconds,
               weightKg:
                 item.weightKg === null ||
                 item.weightKg === undefined ||
@@ -707,7 +763,7 @@ export default function RoutineForm({
 
                     return (
                       <div key={index} className="space-y-4 rounded-xl bg-slate-800 p-4">
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.8fr_120px_140px_140px]">
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.8fr_120px_180px_140px]">
                           <div className="space-y-2">
                             <label className="block text-sm font-medium text-slate-200">
                               Ejercicio
@@ -792,6 +848,8 @@ export default function RoutineForm({
                                             }));
                                             updateExercise(index, "exerciseId", "__new");
                                             updateExercise(index, "measureType", "reps");
+                                            updateExercise(index, "durationMinutesPart", null);
+                                            updateExercise(index, "durationSecondsPart", null);
                                             setOpenSearchIndex(null);
                                           }}
                                           className="block w-full px-3 py-2 text-left text-lime-400 hover:bg-slate-700"
@@ -913,6 +971,8 @@ export default function RoutineForm({
                                     updateExercise(index, "measureType", "reps");
                                     updateExercise(index, "newExerciseName", "");
                                     updateExercise(index, "newExerciseMuscles", []);
+                                    updateExercise(index, "durationMinutesPart", null);
+                                    updateExercise(index, "durationSecondsPart", null);
                                   }}
                                   className="text-sm text-slate-400 hover:text-slate-200"
                                 >
@@ -940,22 +1000,39 @@ export default function RoutineForm({
                           {currentMeasureType === "duration" ? (
                             <div>
                               <label className="mb-2 block text-sm font-medium text-slate-200">
-                                Tiempo (min)
+                                Tiempo (min : seg)
                               </label>
-                              <input
-                                type="number"
-                                min={1}
-                                value={ex.durationSeconds ?? ""}
-                                onChange={(e) =>
-                                  updateExercise(
-                                    index,
-                                    "durationSeconds",
-                                    e.target.value === "" ? null : Number(e.target.value)
-                                  )
-                                }
-                                className="w-full rounded-lg bg-slate-700 px-3 py-2 text-white outline-none ring-1 ring-transparent focus:ring-lime-500"
-                                placeholder="Ej: 45"
-                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={ex.durationMinutesPart ?? ""}
+                                  onChange={(e) =>
+                                    updateExercise(
+                                      index,
+                                      "durationMinutesPart",
+                                      e.target.value === "" ? null : Number(e.target.value)
+                                    )
+                                  }
+                                  className="w-full rounded-lg bg-slate-700 px-3 py-2 text-white outline-none ring-1 ring-transparent focus:ring-lime-500"
+                                  placeholder="Min"
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={59}
+                                  value={ex.durationSecondsPart ?? ""}
+                                  onChange={(e) =>
+                                    updateExercise(
+                                      index,
+                                      "durationSecondsPart",
+                                      e.target.value === "" ? null : Number(e.target.value)
+                                    )
+                                  }
+                                  className="w-full rounded-lg bg-slate-700 px-3 py-2 text-white outline-none ring-1 ring-transparent focus:ring-lime-500"
+                                  placeholder="Seg"
+                                />
+                              </div>
                             </div>
                           ) : (
                             <div>
