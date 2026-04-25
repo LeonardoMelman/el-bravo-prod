@@ -121,7 +121,7 @@ export default function UserActiveStats({ activities, weeklyRequired }: Props) {
   return (
     <div className="mt-[10px] grid w-full grid-cols-2 gap-[10px] sm:flex sm:gap-3">
       {/* Card 1 - semanas activas */}
-      <div className="rounded-lg bg-[#3b4f6c] p-4 sm:w-1/3">
+      <div className="t-accent-surface rounded-lg p-4 sm:w-1/3">
         <div className="text-center text-5xl font-bold text-white">{normalStreak}</div>
         <div className="text-center text-md font-semibold text-white/80">
           semanas activas
@@ -137,7 +137,7 @@ export default function UserActiveStats({ activities, weeklyRequired }: Props) {
       </div>
 
       {/* Card 3 - entrenamientos esta semana */}
-      <div className="col-span-2 min-w-[270px] rounded-lg bg-[#1f2f4a] p-4 sm:w-1/3">
+      <div className="t-mid-surface col-span-2 min-w-[270px] rounded-lg p-4 sm:w-1/3">
         <div className="mb-2 flex justify-center gap-4">
           {Array.from({ length: baseCircles }).map((_, idx) => {
             const filled = idx < currentWeekCount;
@@ -149,7 +149,7 @@ export default function UserActiveStats({ activities, weeklyRequired }: Props) {
                   "h-11 w-11 rounded-full border-[6px] transition-colors " +
                   (filled
                     ? "border-[#465902] bg-gradient-to-b from-[#8AC617] to-[#63710B]"
-                    : "border-[#41556f] bg-transparent")
+                    : "t-circle-empty bg-transparent")
                 }
               />
             );

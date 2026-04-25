@@ -58,7 +58,7 @@ export default async function EditSeasonPage({
   if (!season) redirect(`/group/${groupId}`);
 
   return (
-    <main className="min-h-screen bg-[#08142d] p-6 text-white">
+    <main className="t-page-bg min-h-screen p-6 text-white">
       <div className="mx-auto max-w-4xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <a

@@ -34,7 +34,7 @@ export default function EditRoutinePage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#08142d] p-6 text-white">
+      <main className="t-page-bg min-h-screen p-6 text-white">
         <div className="mx-auto max-w-5xl">Cargando...</div>
       </main>
     );
@@ -42,7 +42,7 @@ export default function EditRoutinePage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-[#08142d] p-6 text-white">
+      <main className="t-page-bg min-h-screen p-6 text-white">
         <div className="mx-auto max-w-5xl text-red-400">{error}</div>
       </main>
     );

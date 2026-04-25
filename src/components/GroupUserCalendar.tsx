@@ -289,7 +289,7 @@ export default function GroupUserCalendar({
           return (
             <div
               key={`month-${day.toISOString()}`}
-              className="absolute rounded-t-md bg-[#1f2f4a] px-3 text-[12px] font-medium text-slate-300 pointer-events-none"
+              className="t-mid-surface pointer-events-none absolute rounded-t-md px-3 text-[12px] font-medium text-slate-300"
               style={{
                 left: centerLeft,
                 top: MONTH_LABEL_TOP,

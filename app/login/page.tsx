@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (window.location.search.includes("reset=ok")) {
+      setSuccessMessage("Contraseña actualizada. Ya podés iniciar sesión con tu nueva contraseña.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,7 +45,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#08142d] px-6 py-10 text-white">
+    <main className="t-page-bg min-h-screen px-6 py-10 text-white">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
         <div className="w-full max-w-md rounded-[28px] bg-slate-800/85 p-8 shadow-2xl">
           <div className="mb-8">
@@ -69,9 +76,18 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-200">
-                Contraseña
-              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-semibold text-slate-200">
+                  Contraseña
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { window.location.href = "/forgot-password"; }}
+                  className="text-xs text-lime-400 transition hover:text-lime-300"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
               <input
                 placeholder="Tu contraseña"
                 type="password"
@@ -81,6 +97,12 @@ export default function LoginPage() {
                 className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-500/60"
               />
             </div>
+
+            {successMessage ? (
+              <div className="rounded-xl border border-lime-500/40 bg-lime-500/10 px-4 py-3 text-sm text-lime-300">
+                {successMessage}
+              </div>
+            ) : null}
 
             {error ? (
               <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -101,9 +123,7 @@ export default function LoginPage() {
             ¿No tenés cuenta?
             <button
               type="button"
-              onClick={() => {
-                window.location.href = "/register";
-              }}
+              onClick={() => { window.location.href = "/register"; }}
               className="ml-2 font-semibold text-lime-400 transition hover:text-lime-300"
             >
               Registrate
