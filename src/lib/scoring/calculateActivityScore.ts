@@ -30,7 +30,7 @@ export type CalculateActivityScoreResult = {
   totalPoints: number;
   basePoints: number;
   durationMinutesUsed: number;
-  durationMultiplier: number;
+  durationMultiplier: boolean;
   consistencyMultiplier: number;
   comebackBonus: number;
   reason: string | null;
@@ -40,7 +40,7 @@ export type CalculateActivityScoreResult = {
     durationMinutesUsed: number;
     weeklyGoal: number;
     basePointsPerActivity: number;
-    durationMultiplier: number;
+    durationMultiplier: boolean;
     consistencyMultiplier: number;
     currentActiveWeekStreak: number;
     currentPerfectWeekStreak: number;
@@ -100,14 +100,10 @@ function applyActivityDurationCap(
   return rawDurationMinutes;
 }
 
-function getDurationMultiplier(durationMinutes: number) {
-  if (durationMinutes <= 0) return 0;
-  if (durationMinutes < 30) return 0.4;
-  if (durationMinutes < 45) return 0.7;
-  if (durationMinutes < 75) return 1.0;
-  if (durationMinutes < 120) return 1.2;
-  if (durationMinutes < 150) return 1.3;
-  return 1.35;
+function getDurationMultiplier(durationMinutes: number,capValueForDiminishedReturn: number) {
+  if (durationMinutes <= capValueForDiminishedReturn) return false;
+  if (durationMinutes > capValueForDiminishedReturn) return true;
+  return false
 }
 
 function getConsistencyMultiplier(
@@ -117,13 +113,13 @@ function getConsistencyMultiplier(
   let multiplier = 1.0;
 
   if (currentActiveWeekStreak >= 5) {
-    multiplier += 0.2;
+    multiplier += 0.25;
   } else if (currentActiveWeekStreak >= 3) {
     multiplier += 0.1;
   }
 
   if (currentPerfectWeekStreak >= 3) {
-    multiplier += 0.2;
+    multiplier += 0.25;
   } else if (currentPerfectWeekStreak >= 1) {
     multiplier += 0.1;
   }
@@ -158,7 +154,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "activity_type_not_allowed",
@@ -168,7 +164,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
@@ -194,7 +190,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "below_min_duration",
@@ -204,7 +200,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
@@ -226,7 +222,7 @@ export function calculateActivityScore(
       totalPoints: 0,
       basePoints: season.basePointsPerActivity,
       durationMinutesUsed: 0,
-      durationMultiplier: 0,
+      durationMultiplier: false,
       consistencyMultiplier: 1,
       comebackBonus: 0,
       reason: "invalid_duration",
@@ -236,7 +232,7 @@ export function calculateActivityScore(
         durationMinutesUsed: 0,
         weeklyGoal: season.weeklyGoal,
         basePointsPerActivity: season.basePointsPerActivity,
-        durationMultiplier: 0,
+        durationMultiplier: false,
         consistencyMultiplier: 1,
         currentActiveWeekStreak,
         currentPerfectWeekStreak,
@@ -247,15 +243,22 @@ export function calculateActivityScore(
     };
   }
 
-  const durationMultiplier = getDurationMultiplier(durationMinutesUsed);
+  
   const consistencyMultiplier = getConsistencyMultiplier(
     currentActiveWeekStreak,
     currentPerfectWeekStreak
   );
+  let variablePoints
   const comebackBonus = getComebackBonus(daysSincePreviousActivity);
-
-  const basePoints = season.basePointsPerActivity;
-  const variablePoints = basePoints * durationMultiplier * consistencyMultiplier;
+  // const basePoints = season.basePointsPerActivity;
+  const basePoints = 120;
+  const dimishedValueAFterCap = 0.5;
+  const capValueForDiminishedReturn = 120;
+  const durationMultiplier = getDurationMultiplier(durationMinutesUsed,capValueForDiminishedReturn);
+  if(durationMultiplier) {
+    variablePoints = (basePoints/60 * capValueForDiminishedReturn) + (basePoints/60 * (durationMinutesUsed - capValueForDiminishedReturn) * dimishedValueAFterCap) * consistencyMultiplier;
+  }
+   variablePoints = basePoints/60 * durationMinutesUsed * consistencyMultiplier;
   const totalPoints = roundScore(variablePoints + comebackBonus);
 
   return {
