@@ -1,14 +1,393 @@
-datasource db {
-  provider = "mysql"
-}
-
 generator client {
   provider = "prisma-client-js"
 }
 
-////////////////////
-// ENUMS
-////////////////////
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique(map: "User_email_key")
+  passwordHash        String
+  name                String?
+  photoUrl            String?              @db.VarChar(2048)
+  emailVerifiedAt     DateTime?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime?            @updatedAt
+  timezone            String?              @db.VarChar(64)
+  weeklyGoal          Int                  @default(3)
+  activities          Activity[]
+  awardsEarned        AwardEarned[]
+  createdExercises    Exercise[]
+  groupMembers        GroupMember[]
+  passwordResetTokens PasswordResetToken[]
+  routines            Routine[]
+  scoreEvents         ScoreEvent[]
+  seasonMembers       SeasonMember[]
+  seasonWeekProgress  SeasonWeekProgress[]
+
+  @@map("user")
+}
+
+model Group {
+  id                  String        @id @default(cuid())
+  name                String
+  photoUrl            String?       @db.VarChar(2048)
+  createdBy           String?
+  createdAt           DateTime      @default(now())
+  inviteCode          String?       @unique(map: "Group_inviteCode_key") @db.VarChar(12)
+  inviteCodeExpiresAt DateTime?
+  description         String?       @db.Text
+  updatedAt           DateTime?     @updatedAt
+  members             GroupMember[]
+  seasons             Season[]
+
+  @@index([createdBy], map: "Group_createdBy_idx")
+  @@map("group")
+}
+
+model GroupMember {
+  id          String           @id @default(cuid())
+  groupId     String
+  userId      String
+  role        GroupRole
+  joinedAt    DateTime         @default(now())
+  leftAt      DateTime?
+  acceptedAt  DateTime?
+  requestedAt DateTime?
+  respondedAt DateTime?
+  respondedBy String?
+  status      MembershipStatus @default(accepted)
+  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade, map: "GroupMember_groupId_fkey")
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade, map: "GroupMember_userId_fkey")
+
+  @@unique([groupId, userId], map: "GroupMember_groupId_userId_key")
+  @@index([groupId, status], map: "GroupMember_groupId_status_idx")
+  @@index([userId], map: "GroupMember_userId_idx")
+  @@map("groupmember")
+}
+
+model Season {
+  id                             String                      @id @default(cuid())
+  groupId                        String
+  name                           String
+  description                    String?                     @db.Text
+  startDate                      DateTime
+  endDate                        DateTime
+  createdAt                      DateTime                    @default(now())
+  allowedActivityTypes           Json?
+  basePointsPerActivity          Int                         @default(10)
+  createdBy                      String?
+  endedAt                        DateTime?
+  isActive                       Boolean                     @default(true)
+  maxScoreableMinutesPerActivity Int?
+  maxScoreableMinutesPerDay      Int?
+  perfectWeekBonus               Int                         @default(15)
+  weeklyGoal                     Int                         @default(2)
+  weeklyStreakBonus              Int                         @default(5)
+  minDuration                    Int                         @default(1)
+  activitySeasons                ActivitySeason[]
+  awardEarned                    AwardEarned[]
+  scoreEvents                    ScoreEvent[]
+  group                          Group                       @relation(fields: [groupId], references: [id], onDelete: Cascade, map: "Season_groupId_fkey")
+  allowedActivityTypeLinks       SeasonAllowedActivityType[]
+  members                        SeasonMember[]
+  weekProgress                   SeasonWeekProgress[]
+
+  @@index([groupId], map: "Season_groupId_idx")
+  @@index([groupId, isActive], map: "Season_groupId_isActive_idx")
+  @@index([startDate, endDate], map: "Season_startDate_endDate_idx")
+  @@map("season")
+}
+
+model SeasonMember {
+  id       String    @id @default(cuid())
+  seasonId String
+  userId   String
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+  season   Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade, map: "SeasonMember_seasonId_fkey")
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "SeasonMember_userId_fkey")
+
+  @@unique([seasonId, userId], map: "SeasonMember_seasonId_userId_key")
+  @@index([userId], map: "SeasonMember_userId_idx")
+  @@index([userId, leftAt, joinedAt(sort: Desc)], map: "idx_seasonmember_userid_leftat_joinedat")
+  @@map("seasonmember")
+}
+
+model Exercise {
+  id              String              @id @default(cuid())
+  name            String
+  measureType     ExerciseMeasureType @default(reps)
+  createdByUserId String?
+  activities      ActivityExercise[]
+  createdBy       User?               @relation(fields: [createdByUserId], references: [id])
+  muscles         ExerciseMuscle[]
+  routines        RoutineExercise[]
+
+  @@unique([name, createdByUserId])
+  @@index([createdByUserId])
+  @@map("exercise")
+}
+
+model Muscle {
+  id        String           @id @default(cuid())
+  name      String           @unique(map: "Muscle_name_key")
+  groupKey  String           @db.VarChar(64)
+  slug      String           @unique(map: "Muscle_slug_key")
+  exercises ExerciseMuscle[]
+
+  @@map("muscle")
+}
+
+model ExerciseMuscle {
+  exerciseId String
+  muscleId   String
+  percentage Int
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade, map: "ExerciseMuscle_exerciseId_fkey")
+  muscle     Muscle   @relation(fields: [muscleId], references: [id], onDelete: Cascade, map: "ExerciseMuscle_muscleId_fkey")
+
+  @@id([exerciseId, muscleId])
+  @@index([muscleId], map: "ExerciseMuscle_muscleId_idx")
+  @@map("exercisemuscle")
+}
+
+model Activity {
+  id                 String             @id @default(cuid())
+  userId             String
+  routineId          String?
+  type               ActivityType
+  startedAt          DateTime
+  endedAt            DateTime
+  notes              String?            @db.Text
+  createdAt          DateTime           @default(now())
+  deletedAt          DateTime?
+  durationMinutes    Int?
+  isDeleted          Boolean            @default(false)
+  source             String?            @db.VarChar(32)
+  updatedAt          DateTime?          @updatedAt
+  activityCategoryId String?
+  activityCategory   ActivityCategory?  @relation(fields: [activityCategoryId], references: [id], map: "Activity_activityCategoryId_fkey")
+  routine            Routine?           @relation(fields: [routineId], references: [id], map: "Activity_routineId_fkey")
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Activity_userId_fkey")
+  exercises          ActivityExercise[]
+  media              ActivityMedia[]
+  activitySeasons    ActivitySeason[]
+  awardsEarned       AwardEarned[]
+  scoreEvents        ScoreEvent[]
+
+  @@index([activityCategoryId], map: "Activity_activityCategoryId_idx")
+  @@index([routineId], map: "Activity_routineId_idx")
+  @@index([startedAt], map: "Activity_startedAt_idx")
+  @@index([type], map: "Activity_type_idx")
+  @@index([userId, startedAt], map: "Activity_userId_startedAt_idx")
+  @@index([userId, isDeleted, startedAt(sort: Desc)], map: "idx_activity_userid_deleted_startedat")
+  @@map("activity")
+}
+
+model ActivityMedia {
+  id         String   @id @default(cuid())
+  activityId String
+  url        String   @db.VarChar(2048)
+  storageKey String?  @db.VarChar(255)
+  mimeType   String?  @db.VarChar(128)
+  sizeBytes  Int?
+  width      Int?
+  height     Int?
+  uploadedAt DateTime @default(now())
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade, map: "ActivityMedia_activityId_fkey")
+
+  @@index([activityId], map: "ActivityMedia_activityId_idx")
+  @@map("activitymedia")
+}
+
+model ActivitySeason {
+  id         String   @id @default(cuid())
+  activityId String
+  seasonId   String
+  createdAt  DateTime @default(now())
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade, map: "ActivitySeason_activityId_fkey")
+  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade, map: "ActivitySeason_seasonId_fkey")
+
+  @@unique([activityId, seasonId], map: "ActivitySeason_activityId_seasonId_key")
+  @@index([seasonId], map: "ActivitySeason_seasonId_idx")
+  @@index([seasonId, activityId], map: "idx_activityseason_seasonid_activityid")
+  @@map("activityseason")
+}
+
+model Routine {
+  id         String            @id @default(cuid())
+  name       String
+  userId     String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime?         @updatedAt
+  activities Activity[]
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Routine_userId_fkey")
+  exercises  RoutineExercise[]
+
+  @@index([userId], map: "Routine_userId_idx")
+  @@map("routine")
+}
+
+model RoutineExercise {
+  id              String   @id @default(cuid())
+  routineId       String
+  exerciseId      String
+  sets            Int
+  reps            Int?
+  weightKg        Float?
+  durationSeconds Int?
+  exercise        Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade, map: "RoutineExercise_exerciseId_fkey")
+  routine         Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade, map: "RoutineExercise_routineId_fkey")
+
+  @@index([exerciseId], map: "RoutineExercise_exerciseId_idx")
+  @@index([routineId], map: "RoutineExercise_routineId_idx")
+  @@map("routineexercise")
+}
+
+model ActivityExercise {
+  id              String   @id @default(cuid())
+  activityId      String
+  exerciseId      String
+  sets            Int
+  reps            Int?
+  weightKg        Float?
+  durationSeconds Int?
+  activity        Activity @relation(fields: [activityId], references: [id], onDelete: Cascade, map: "ActivityExercise_activityId_fkey")
+  exercise        Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade, map: "ActivityExercise_exerciseId_fkey")
+
+  @@index([activityId], map: "ActivityExercise_activityId_idx")
+  @@index([exerciseId], map: "ActivityExercise_exerciseId_idx")
+  @@map("activityexercise")
+}
+
+model ActivityCategory {
+  id         String                      @id @default(cuid())
+  slug       String                      @unique(map: "ActivityCategory_slug_key")
+  name       String
+  sortOrder  Int                         @default(0)
+  isActive   Boolean                     @default(true)
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
+  activities Activity[]
+  seasons    SeasonAllowedActivityType[]
+
+  @@index([isActive, sortOrder], map: "ActivityCategory_isActive_sortOrder_idx")
+  @@map("activitycategory")
+}
+
+model SeasonAllowedActivityType {
+  id                 String           @id @default(cuid())
+  seasonId           String
+  activityCategoryId String
+  createdAt          DateTime         @default(now())
+  activityCategory   ActivityCategory @relation(fields: [activityCategoryId], references: [id], onDelete: Cascade, map: "SeasonAllowedActivityType_activityCategoryId_fkey")
+  season             Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade, map: "SeasonAllowedActivityType_seasonId_fkey")
+
+  @@unique([seasonId, activityCategoryId], map: "SeasonAllowedActivityType_seasonId_activityCategoryId_key")
+  @@index([activityCategoryId], map: "SeasonAllowedActivityType_activityCategoryId_idx")
+  @@map("seasonallowedactivitytype")
+}
+
+model ScoreEvent {
+  id         String         @id @default(cuid())
+  seasonId   String
+  userId     String
+  activityId String?
+  weekStart  DateTime?
+  type       ScoreEventType
+  points     Int
+  reason     String?        @db.Text
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  activity   Activity?      @relation(fields: [activityId], references: [id], map: "ScoreEvent_activityId_fkey")
+  season     Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade, map: "ScoreEvent_seasonId_fkey")
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade, map: "ScoreEvent_userId_fkey")
+
+  @@index([activityId], map: "ScoreEvent_activityId_idx")
+  @@index([seasonId, userId], map: "ScoreEvent_seasonId_userId_idx")
+  @@index([seasonId, weekStart], map: "ScoreEvent_seasonId_weekStart_idx")
+  @@index([userId], map: "ScoreEvent_userId_idx")
+  @@index([seasonId, userId, type], map: "idx_scoreevent_season_user_type")
+  @@index([seasonId, userId, weekStart], map: "idx_scoreevent_season_user_weekstart")
+  @@map("scoreevent")
+}
+
+model SeasonWeekProgress {
+  id              String    @id @default(cuid())
+  seasonId        String
+  userId          String
+  weekStart       DateTime
+  activitiesCount Int       @default(0)
+  minutesTotal    Int       @default(0)
+  goalTarget      Int
+  goalReached     Boolean   @default(false)
+  perfectWeek     Boolean   @default(false)
+  streakCount     Int       @default(0)
+  pointsEarned    Int       @default(0)
+  updatedAt       DateTime? @updatedAt
+  season          Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade, map: "SeasonWeekProgress_seasonId_fkey")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "SeasonWeekProgress_userId_fkey")
+
+  @@unique([seasonId, userId, weekStart], map: "SeasonWeekProgress_seasonId_userId_weekStart_key")
+  @@index([seasonId, weekStart], map: "SeasonWeekProgress_seasonId_weekStart_idx")
+  @@index([userId, weekStart], map: "SeasonWeekProgress_userId_weekStart_idx")
+  @@map("seasonweekprogress")
+}
+
+model AwardDefinition {
+  id          String        @id @default(cuid())
+  code        String        @unique(map: "AwardDefinition_code_key") @db.VarChar(64)
+  name        String
+  description String?       @db.Text
+  scope       AwardScope    @default(season)
+  pointsBonus Int           @default(0)
+  iconKey     String?       @db.VarChar(128)
+  criteria    Json?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  category    String?       @db.VarChar(64)
+  level       Int?
+  earned      AwardEarned[]
+
+  @@map("awarddefinition")
+}
+
+model AwardEarned {
+  id         String          @id @default(cuid())
+  awardId    String
+  userId     String
+  seasonId   String?
+  activityId String?
+  earnedAt   DateTime        @default(now())
+  metadata   Json?
+  dedupeKey  String          @unique(map: "AwardEarned_dedupeKey_key") @db.VarChar(255)
+  activity   Activity?       @relation(fields: [activityId], references: [id], map: "AwardEarned_activityId_fkey")
+  award      AwardDefinition @relation(fields: [awardId], references: [id], onDelete: Cascade, map: "AwardEarned_awardId_fkey")
+  season     Season?         @relation(fields: [seasonId], references: [id], map: "AwardEarned_seasonId_fkey")
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade, map: "AwardEarned_userId_fkey")
+
+  @@index([activityId], map: "AwardEarned_activityId_idx")
+  @@index([awardId], map: "AwardEarned_awardId_fkey")
+  @@index([seasonId, userId], map: "AwardEarned_seasonId_userId_idx")
+  @@index([userId], map: "AwardEarned_userId_idx")
+  @@map("awardearned")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passwordresettoken")
+}
 
 enum GroupRole {
   admin
@@ -49,451 +428,4 @@ enum AwardScope {
 enum ExerciseMeasureType {
   reps
   duration
-}
-
-////////////////////
-// MODELS
-////////////////////
-
-model User {
-  id           String  @id @default(cuid())
-  email        String  @unique
-  passwordHash String
-  name         String?
-  photoUrl     String? @db.VarChar(2048)
-
-  // Perfil MVP
-  weeklyGoal Int     @default(3)
-  timezone   String? @db.VarChar(64)
-
-  emailVerifiedAt DateTime?
-  isActive        Boolean   @default(true)
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  // Relations
-  groupMembers        GroupMember[]
-  seasonMembers       SeasonMember[]
-  activities          Activity[]
-  routines            Routine[]
-  scoreEvents         ScoreEvent[]
-  seasonWeekProgress  SeasonWeekProgress[]
-  awardsEarned        AwardEarned[]
-  passwordResetTokens PasswordResetToken[]
-
-  @@map("user")
-}
-
-model Group {
-  id          String  @id @default(cuid())
-  name        String
-  description String? @db.Text
-  photoUrl    String? @db.VarChar(2048)
-
-  createdBy String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  inviteCode          String?   @unique @db.VarChar(12)
-  inviteCodeExpiresAt DateTime?
-
-  // Relations
-  members GroupMember[]
-  seasons Season[]
-
-  @@index([createdBy])
-  @@map("group")
-}
-
-model GroupMember {
-  id      String @id @default(cuid())
-  groupId String
-  userId  String
-
-  role   GroupRole
-  status MembershipStatus @default(accepted)
-
-  requestedAt DateTime?
-  acceptedAt  DateTime?
-  respondedAt DateTime?
-  respondedBy String?
-
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
-
-  // Relations
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([groupId, userId])
-  @@index([userId])
-  @@index([groupId, status])
-  @@map("groupmember")
-}
-
-model Season {
-  id          String  @id @default(cuid())
-  groupId     String
-  name        String
-  description String? @db.Text
-
-  startDate DateTime
-  endDate   DateTime
-
-  createdBy String?
-  createdAt DateTime  @default(now())
-  endedAt   DateTime?
-
-  isActive Boolean @default(true)
-
-  // Config MVP de competencia
-  weeklyGoal  Int @default(2)
-  minDuration Int @default(1)
-
-  // Legacy temporal
-  allowedActivityTypes Json?
-
-  // Nueva relación normalizada
-  allowedActivityTypeLinks SeasonAllowedActivityType[]
-
-  // Fair play / caps
-  maxScoreableMinutesPerDay      Int?
-  maxScoreableMinutesPerActivity Int?
-
-  // Config básica de scoring (10x scale)
-  basePointsPerActivity Int @default(100)
-  weeklyStreakBonus     Int @default(50)
-  perfectWeekBonus      Int @default(150)
-
-  // Relations
-  group           Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  members         SeasonMember[]
-  activitySeasons ActivitySeason[]
-  scoreEvents     ScoreEvent[]
-  weekProgress    SeasonWeekProgress[]
-  awardEarned     AwardEarned[]
-
-  @@index([groupId])
-  @@index([groupId, isActive])
-  @@index([startDate, endDate])
-  @@map("season")
-}
-
-model SeasonMember {
-  id       String    @id @default(cuid())
-  seasonId String
-  userId   String
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
-
-  // Relations
-  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([seasonId, userId])
-  @@index([userId])
-  @@map("seasonmember")
-}
-
-model Exercise {
-  id   String @id @default(cuid())
-  name String
-
-  measureType ExerciseMeasureType @default(reps)
-
-  muscles    ExerciseMuscle[]
-  routines   RoutineExercise[]
-  activities ActivityExercise[]
-
-  @@unique([name])
-  @@map("exercise")
-}
-
-model Muscle {
-  id       String @id @default(cuid())
-  name     String
-  slug     String @unique
-  groupKey String @db.VarChar(64) // legs, chest, back, shoulders, arms, core, glutes, etc.
-
-  exercises ExerciseMuscle[]
-
-  @@unique([name])
-  @@map("muscle")
-}
-
-model ExerciseMuscle {
-  exerciseId String
-  muscleId   String
-  percentage Int
-
-  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  muscle   Muscle   @relation(fields: [muscleId], references: [id], onDelete: Cascade)
-
-  @@id([exerciseId, muscleId])
-  @@index([muscleId])
-  @@map("exercisemuscle")
-}
-
-model Activity {
-  id        String       @id @default(cuid())
-  userId    String
-  routineId String?
-  type      ActivityType // legacy temporal
-
-  // Nueva relación normalizada
-  activityCategoryId String?
-  activityCategory   ActivityCategory? @relation(fields: [activityCategoryId], references: [id], onDelete: SetNull)
-
-  startedAt       DateTime
-  endedAt         DateTime
-  durationMinutes Int?
-
-  notes  String? @db.Text
-  source String? @db.VarChar(32)
-
-  isDeleted Boolean   @default(false)
-  deletedAt DateTime?
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  // Relations
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  routine         Routine?           @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  exercises       ActivityExercise[]
-  media           ActivityMedia[]
-  activitySeasons ActivitySeason[]
-  scoreEvents     ScoreEvent[]
-  awardsEarned    AwardEarned[]
-
-  @@index([userId, startedAt])
-  @@index([startedAt])
-  @@index([type])
-  @@index([routineId])
-  @@index([activityCategoryId])
-  @@map("activity")
-}
-
-model ActivityMedia {
-  id         String @id @default(cuid())
-  activityId String
-
-  url        String  @db.VarChar(2048)
-  storageKey String? @db.VarChar(255)
-  mimeType   String? @db.VarChar(128)
-  sizeBytes  Int?
-  width      Int?
-  height     Int?
-
-  uploadedAt DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-  @@map("activitymedia")
-}
-
-model ActivitySeason {
-  id         String   @id @default(cuid())
-  activityId String
-  seasonId   String
-  createdAt  DateTime @default(now())
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  season   Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-
-  @@unique([activityId, seasonId])
-  @@index([seasonId])
-  @@map("activityseason")
-}
-
-model Routine {
-  id   String @id @default(cuid())
-  name String
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  activities Activity[]
-  exercises  RoutineExercise[]
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime? @updatedAt
-
-  @@index([userId])
-  @@map("routine")
-}
-
-model RoutineExercise {
-  id String @id @default(cuid())
-
-  routineId  String
-  exerciseId String
-
-  sets            Int
-  reps            Int?
-  durationSeconds Int?
-  weightKg        Float?
-
-  routine  Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-
-  @@index([routineId])
-  @@index([exerciseId])
-  @@map("routineexercise")
-}
-
-model ActivityExercise {
-  id String @id @default(cuid())
-
-  activityId String
-  exerciseId String
-
-  sets            Int
-  reps            Int?
-  durationSeconds Int?
-  weightKg        Float?
-
-  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-
-  @@index([activityId])
-  @@index([exerciseId])
-  @@map("activityexercise")
-}
-
-model ActivityCategory {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  activities Activity[]
-  seasons    SeasonAllowedActivityType[]
-
-  @@index([isActive, sortOrder])
-  @@map("activitycategory")
-}
-
-model SeasonAllowedActivityType {
-  id                 String   @id @default(cuid())
-  seasonId           String
-  activityCategoryId String
-  createdAt          DateTime @default(now())
-
-  season           Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  activityCategory ActivityCategory @relation(fields: [activityCategoryId], references: [id], onDelete: Cascade)
-
-  @@unique([seasonId, activityCategoryId])
-  @@index([activityCategoryId])
-  @@map("seasonallowedactivitytype")
-}
-
-model ScoreEvent {
-  id         String         @id @default(cuid())
-  seasonId   String
-  userId     String
-  activityId String?
-  weekStart  DateTime?
-  type       ScoreEventType
-  points     Int
-  reason     String?        @db.Text
-  metadata   Json?
-  createdAt  DateTime       @default(now())
-
-  season   Season    @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
-
-  @@index([seasonId, userId])
-  @@index([userId])
-  @@index([activityId])
-  @@index([seasonId, weekStart])
-  @@map("scoreevent")
-}
-
-model SeasonWeekProgress {
-  id        String   @id @default(cuid())
-  seasonId  String
-  userId    String
-  weekStart DateTime
-
-  activitiesCount Int @default(0)
-  minutesTotal    Int @default(0)
-
-  goalTarget   Int
-  goalReached  Boolean @default(false)
-  perfectWeek  Boolean @default(false)
-  streakCount  Int     @default(0)
-  pointsEarned Int     @default(0)
-
-  updatedAt DateTime? @updatedAt
-
-  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([seasonId, userId, weekStart])
-  @@index([seasonId, weekStart])
-  @@index([userId, weekStart])
-  @@map("seasonweekprogress")
-}
-
-model AwardDefinition {
-  id          String     @id @default(cuid())
-  code        String     @unique @db.VarChar(64)
-  name        String
-  description String?    @db.Text
-  scope       AwardScope @default(season)
-
-  pointsBonus Int     @default(0)
-  iconKey     String? @db.VarChar(128)
-  criteria    Json?
-
-  category  String?  @db.VarChar(64) // streak, volume, muscle, running, consistency, profile
-  level     Int?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  earned AwardEarned[]
-
-  @@map("awarddefinition")
-}
-
-model AwardEarned {
-  id         String   @id @default(cuid())
-  awardId    String
-  userId     String
-  seasonId   String?
-  activityId String?
-  earnedAt   DateTime @default(now())
-  metadata   Json?
-  dedupeKey  String   @unique @db.VarChar(255)
-
-  award    AwardDefinition @relation(fields: [awardId], references: [id], onDelete: Cascade)
-  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  season   Season?         @relation(fields: [seasonId], references: [id], onDelete: SetNull)
-  activity Activity?       @relation(fields: [activityId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([seasonId, userId])
-  @@index([activityId])
-  @@map("awardearned")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  userId    String
-  tokenHash String    @unique @db.VarChar(64)
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("passwordresettoken")
 }

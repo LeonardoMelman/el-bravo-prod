@@ -9,6 +9,7 @@ type ExerciseMeasureType = "reps" | "duration";
 export type RoutineExerciseInput = {
   exerciseId: string;
   measureType?: ExerciseMeasureType;
+  createdByUserId?: string | null;
   sets: number;
   reps?: number | null;
   durationSeconds?: number | null;
@@ -28,7 +29,8 @@ type ExerciseFormItem = RoutineExerciseInput & {
 type Exercise = {
   id: string;
   name: string;
-  measureType?: ExerciseMeasureType;
+  measureType?: "reps" | "duration";
+  createdByUserId?: string | null;
   muscles?: {
     exerciseId?: string;
     muscleId?: string;
@@ -47,6 +49,10 @@ type Muscle = {
   name: string;
   slug?: string;
   groupKey?: string;
+};
+
+type CurrentUserResponse = {
+  id: string;
 };
 
 type RoutineFormProps = {
@@ -160,6 +166,7 @@ export default function RoutineForm({
   const [isCreatingNewExercise, setIsCreatingNewExercise] = useState<Record<number, boolean>>(
     {}
   );
+  const [currentUserId, setCurrentUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingExercises, setLoadingExercises] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -169,13 +176,16 @@ export default function RoutineForm({
       try {
         setLoadingExercises(true);
 
-        const [exerciseRes, muscleRes] = await Promise.all([
+        const [exerciseRes, muscleRes, currentUserRes] = await Promise.all([
           fetch("/api/exercise/list", { cache: "no-store" }),
           fetch("/api/muscle/list", { cache: "no-store" }),
+          fetch("/api/auth/me", { cache: "no-store" }),
         ]);
 
         const exerciseData = await exerciseRes.json().catch(() => ({}));
         const muscleData = await muscleRes.json().catch(() => ({}));
+        const currentUserData =
+          (await currentUserRes.json().catch(() => ({}))) as Partial<CurrentUserResponse>;
 
         if (!exerciseRes.ok) {
           throw new Error(exerciseData?.error || "Error cargando ejercicios");
@@ -185,13 +195,38 @@ export default function RoutineForm({
           throw new Error(muscleData?.error || "Error cargando músculos");
         }
 
-        setAvailableExercises(
-          Array.isArray(exerciseData) ? exerciseData : exerciseData.exercises || []
-        );
-        setAvailableMuscles(
-          Array.isArray(muscleData) ? muscleData : muscleData.muscles || []
-        );
+        if (!currentUserRes.ok) {
+          throw new Error("No se pudo identificar al usuario actual.");
+        }
+
+        const resolvedCurrentUserId =
+          typeof currentUserData?.id === "string" ? currentUserData.id : "";
+
+        const rawLoadedExercises = Array.isArray(exerciseData)
+          ? exerciseData
+          : Array.isArray(exerciseData?.exercises)
+          ? exerciseData.exercises
+          : [];
+
+        const loadedExercises = rawLoadedExercises.filter((exercise: Exercise) => {
+          if (!exercise.createdByUserId) {
+            return true;
+          }
+
+          return exercise.createdByUserId === resolvedCurrentUserId;
+        });
+
+        const loadedMuscles = Array.isArray(muscleData)
+          ? muscleData
+          : Array.isArray(muscleData?.muscles)
+          ? muscleData.muscles
+          : [];
+
+        setCurrentUserId(resolvedCurrentUserId);
+        setAvailableExercises(loadedExercises);
+        setAvailableMuscles(loadedMuscles);
       } catch (err: any) {
+        setCurrentUserId("");
         setAvailableExercises([]);
         setAvailableMuscles([]);
         setError(err?.message || "No se pudieron cargar ejercicios o músculos");
@@ -528,7 +563,11 @@ export default function RoutineForm({
           {
             id: data.id,
             name: data.name ?? newName,
-            measureType: "reps",
+            measureType: data.measureType ?? "reps",
+            createdByUserId:
+              typeof data.createdByUserId === "string"
+                ? data.createdByUserId
+                : currentUserId || null,
             muscles: Array.isArray(data.muscles) ? data.muscles : [],
           },
         ]);

@@ -45,7 +45,6 @@ export async function POST(request: Request) {
             userId: parsed?.userId ?? user.id,
             url: blob.url,
             pathname: blob.pathname,
-            size: blob.size,
             contentType: blob.contentType,
           });
         } catch (error) {
