@@ -148,7 +148,8 @@ model Season {
   isActive Boolean @default(true)
 
   // Config MVP de competencia
-  weeklyGoal Int @default(2)
+  weeklyGoal  Int @default(2)
+  minDuration Int @default(1)
 
   // Legacy temporal
   allowedActivityTypes Json?
@@ -160,10 +161,10 @@ model Season {
   maxScoreableMinutesPerDay      Int?
   maxScoreableMinutesPerActivity Int?
 
-  // Config básica de scoring
-  basePointsPerActivity Int @default(10)
-  weeklyStreakBonus     Int @default(5)
-  perfectWeekBonus      Int @default(15)
+  // Config básica de scoring (10x scale)
+  basePointsPerActivity Int @default(100)
+  weeklyStreakBonus     Int @default(50)
+  perfectWeekBonus      Int @default(150)
 
   // Relations
   group           Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)

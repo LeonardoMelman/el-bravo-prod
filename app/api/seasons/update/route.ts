@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       startDate,
       endDate,
       minPerWeek,
+      minDuration,
       allowedActivityCategoryIds,
       description,
     } = body ?? {};
@@ -109,6 +110,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid weekly goal" }, { status: 400 });
     }
 
+    const normalizedMinDuration = minDuration !== undefined ? Number(minDuration) : 1;
+
+    if (
+      !Number.isInteger(normalizedMinDuration) ||
+      normalizedMinDuration < 1 ||
+      normalizedMinDuration > 300
+    ) {
+      return NextResponse.json({ error: "Invalid minDuration (1–300 minutes)" }, { status: 400 });
+    }
+
     const normalizedAllowedActivityCategoryIds =
       normalizeAllowedActivityCategoryIds(allowedActivityCategoryIds);
 
@@ -148,6 +159,7 @@ export async function POST(req: Request) {
         startDate: start,
         endDate: end,
         weeklyGoal: normalizedWeeklyGoal,
+        minDuration: normalizedMinDuration,
         allowedActivityTypes: categories.map((item: ActivityCategoryRow) => item.slug),
         allowedActivityTypeLinks: {
           deleteMany: {},

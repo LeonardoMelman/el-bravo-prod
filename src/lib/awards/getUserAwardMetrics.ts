@@ -16,38 +16,42 @@ type UserAwardMetrics = {
   latestSeasonId: string | null;
 };
 
-type NormalizedActivity = {
+type SlimActivity = {
   id: string;
   type: ActivityType;
   startedAt: Date;
-  endedAt: Date;
+};
+
+type RecentActivityWithMuscles = {
+  id: string;
   exercises: {
     sets: number;
-    reps: number;
-    muscles: {
-      percentage: number;
-      muscle: {
-        id: string;
-        name: string;
-        slug?: string | null;
-        groupKey?: string | null;
-      };
-    }[];
+    reps: number | null;
+    exercise: {
+      muscles: {
+        percentage: number;
+        muscle: {
+          id: string;
+          name: string;
+          slug: string | null;
+          groupKey: string | null;
+        };
+      }[];
+    } | null;
   }[];
 };
 
 function startOfWeek(date: Date) {
   const d = new Date(date);
-  const day = d.getDay(); // 0 domingo, 1 lunes...
-  const diff = day === 0 ? -6 : 1 - day; // semana arranca lunes
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + diff);
   return d;
 }
 
 function formatWeekKey(date: Date) {
-  const start = startOfWeek(date);
-  return start.toISOString().slice(0, 10);
+  return startOfWeek(date).toISOString().slice(0, 10);
 }
 
 function addDays(date: Date, days: number) {
@@ -58,18 +62,15 @@ function addDays(date: Date, days: number) {
 
 function getWeekendKey(date: Date) {
   const d = new Date(date);
-  const day = d.getDay(); // 0 domingo, 6 sábado
-
+  const day = d.getDay();
   let saturday: Date;
   if (day === 6) {
     saturday = new Date(d);
   } else if (day === 0) {
     saturday = addDays(d, -1);
   } else {
-    // no es fin de semana, igual devolvemos la semana del sábado más cercano hacia atrás
     saturday = addDays(d, -(day + 1));
   }
-
   saturday.setHours(0, 0, 0, 0);
   return saturday.toISOString().slice(0, 10);
 }
@@ -127,24 +128,21 @@ function isWeekend(date: Date) {
   return day === 0 || day === 6;
 }
 
-function calculateActivityMuscleGroupShare(activity: NormalizedActivity) {
+function calculateMuscleGroupShare(exercises: RecentActivityWithMuscles["exercises"]) {
   const loadsByGroup = new Map<string, number>();
   let totalLoad = 0;
 
-  for (const exerciseEntry of activity.exercises) {
-    const sets = Number(exerciseEntry.sets ?? 0);
-    const reps = Number(exerciseEntry.reps ?? 0);
-
+  for (const ex of exercises) {
+    const sets = Number(ex.sets ?? 0);
+    const reps = Number(ex.reps ?? 0);
     if (sets <= 0 || reps <= 0) continue;
 
     const baseLoad = sets * reps;
 
-    for (const relation of exerciseEntry.muscles) {
+    for (const relation of ex.exercise?.muscles ?? []) {
       const percentage = Number(relation.percentage ?? 0);
       const groupKey = relation.muscle.groupKey ?? "other";
-
       if (percentage <= 0) continue;
-
       const weightedLoad = baseLoad * (percentage / 100);
       totalLoad += weightedLoad;
       loadsByGroup.set(groupKey, (loadsByGroup.get(groupKey) ?? 0) + weightedLoad);
@@ -152,96 +150,87 @@ function calculateActivityMuscleGroupShare(activity: NormalizedActivity) {
   }
 
   const result = new Map<string, number>();
-
-  if (totalLoad <= 0) {
-    return result;
-  }
+  if (totalLoad <= 0) return result;
 
   for (const [groupKey, load] of loadsByGroup.entries()) {
     result.set(groupKey, (load / totalLoad) * 100);
   }
-
   return result;
 }
 
 export async function getUserAwardMetrics(userId: string): Promise<UserAwardMetrics> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      weeklyGoal: true,
-    } as any,
-  });
+  const rollingWindowStart = addDays(new Date(), -30);
+  rollingWindowStart.setHours(0, 0, 0, 0);
 
-  if (!user) {
-    throw new Error("Usuario no encontrado");
-  }
-
-  const weeklyGoal = Number((user as any).weeklyGoal ?? 3);
-
-  const activitiesRaw = await prisma.activity.findMany({
-    where: {
-      userId,
-    },
-    orderBy: {
-      startedAt: "desc",
-    },
-    include: {
-      exercises: {
-        include: {
-          exercise: {
-            include: {
-              muscles: {
-                include: {
-                  muscle: true,
+  // Round-trip 1: three parallel queries
+  // - user (weeklyGoal)
+  // - all non-deleted activities (type + startedAt only — no exercise joins)
+  // - recent 30-day activities with exercises+muscles (bounded window for muscle rolling calc)
+  // - latest season membership
+  const [user, allActivitiesRaw, recentWithMusclesRaw, latestSeasonMember] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, weeklyGoal: true } as any,
+    }),
+    prisma.activity.findMany({
+      where: { userId, isDeleted: false },
+      select: { id: true, type: true, startedAt: true },
+      orderBy: { startedAt: "desc" },
+    }),
+    prisma.activity.findMany({
+      where: { userId, isDeleted: false, startedAt: { gte: rollingWindowStart } },
+      select: {
+        id: true,
+        exercises: {
+          select: {
+            sets: true,
+            reps: true,
+            exercise: {
+              select: {
+                muscles: {
+                  select: {
+                    percentage: true,
+                    muscle: {
+                      select: { id: true, name: true, slug: true, groupKey: true },
+                    },
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.seasonMember.findFirst({
+      where: { userId, leftAt: null },
+      orderBy: { joinedAt: "desc" },
+      select: { seasonId: true },
+    }),
+  ]);
 
-  const activities = (activitiesRaw as any[]).map(
-    (activity): NormalizedActivity => ({
-      id: activity.id,
-      type: activity.type as ActivityType,
-      startedAt: new Date(activity.startedAt),
-      endedAt: new Date(activity.endedAt),
-      exercises: Array.isArray(activity.exercises)
-        ? activity.exercises.map((entry: any) => ({
-            sets: Number(entry.sets ?? 0),
-            reps: Number(entry.reps ?? 0),
-            muscles: Array.isArray(entry.exercise?.muscles)
-              ? entry.exercise.muscles.map((relation: any) => ({
-                  percentage: Number(relation.percentage ?? 0),
-                  muscle: {
-                    id: relation.muscle?.id ?? "",
-                    name: relation.muscle?.name ?? "Músculo",
-                    slug: relation.muscle?.slug ?? null,
-                    groupKey: relation.muscle?.groupKey ?? "other",
-                  },
-                }))
-              : [],
-          }))
-        : [],
-    })
-  );
+  if (!user) throw new Error("Usuario no encontrado");
 
-  // =========================================
-  // 1. Rachas por tipo de actividad por semana
-  // =========================================
+  const weeklyGoal = Number((user as any).weeklyGoal ?? 3);
+  const activities = allActivitiesRaw as unknown as SlimActivity[];
+  const recentActivities = recentWithMusclesRaw as unknown as RecentActivityWithMuscles[];
+  const latestSeasonId = latestSeasonMember?.seasonId ?? null;
+
+  // ── Streak calculations (in-memory, no extra queries) ─────────────────────
+
   const weekKeysByType: Record<ActivityType, string[]> = {
-    gym: [],
-    run: [],
-    sport: [],
-    mobility: [],
-    other: [],
+    gym: [], run: [], sport: [], mobility: [], other: [],
   };
 
+  const activityCountByWeek = new Map<string, number>();
+  const weekendKeys: string[] = [];
+
   for (const activity of activities) {
-    weekKeysByType[activity.type].push(formatWeekKey(activity.startedAt));
+    const weekKey = formatWeekKey(activity.startedAt);
+    weekKeysByType[activity.type].push(weekKey);
+    activityCountByWeek.set(weekKey, (activityCountByWeek.get(weekKey) ?? 0) + 1);
+    if (isWeekend(activity.startedAt)) {
+      weekendKeys.push(getWeekendKey(activity.startedAt));
+    }
   }
 
   const activityTypeWeekStreaks: Record<ActivityType, number> = {
@@ -252,98 +241,40 @@ export async function getUserAwardMetrics(userId: string): Promise<UserAwardMetr
     other: getCurrentConsecutiveStreak(weekKeysByType.other),
   };
 
-  // =========================================
-  // 2. Racha de semanas perfectas
-  // Semana perfecta = llegó al weeklyGoal
-  // =========================================
-  const activityCountByWeek = new Map<string, number>();
-
-  for (const activity of activities) {
-    const weekKey = formatWeekKey(activity.startedAt);
-    activityCountByWeek.set(weekKey, (activityCountByWeek.get(weekKey) ?? 0) + 1);
-  }
-
   const perfectWeekKeys = [...activityCountByWeek.entries()]
     .filter(([, count]) => count >= weeklyGoal)
     .map(([weekKey]) => weekKey);
 
   const perfectWeekStreak = getCurrentConsecutiveStreak(perfectWeekKeys);
-
-  // =========================================
-  // 3. Racha de fines de semana con actividad
-  // =========================================
-  const weekendKeys = activities
-    .filter((activity) => isWeekend(activity.startedAt))
-    .map((activity) => getWeekendKey(activity.startedAt));
-
   const weekendActivityStreak = getCurrentConsecutiveWeekendStreak(weekendKeys);
 
-  // =========================================
-  // 4. Conteo rolling 30 días por grupo muscular
-  // Cuenta una actividad si el grupo aporta al menos 20%
-  // =========================================
-  const rollingWindowStart = addDays(new Date(), -30);
-  rollingWindowStart.setHours(0, 0, 0, 0);
+  // ── Muscle group rolling 30 days (bounded to recent activities only) ───────
 
   const muscleGroupRolling30Days: Record<string, number> = {};
 
-  for (const activity of activities) {
-    if (activity.startedAt < rollingWindowStart) continue;
-
-    const groupShare = calculateActivityMuscleGroupShare(activity);
-
+  for (const activity of recentActivities) {
+    const groupShare = calculateMuscleGroupShare(activity.exercises);
     for (const [groupKey, sharePct] of groupShare.entries()) {
       if (sharePct >= 20) {
-        muscleGroupRolling30Days[groupKey] =
-          (muscleGroupRolling30Days[groupKey] ?? 0) + 1;
+        muscleGroupRolling30Days[groupKey] = (muscleGroupRolling30Days[groupKey] ?? 0) + 1;
       }
     }
   }
 
-  // =========================================
-  // 5. Tipos distintos de actividad en la última temporada del usuario
-  // =========================================
-  const latestSeasonMember = await prisma.seasonMember.findFirst({
-    where: {
-      userId,
-      leftAt: null,
-    },
-    orderBy: {
-      joinedAt: "desc",
-    },
-    select: {
-      seasonId: true,
-    },
-  });
+  // ── Distinct activity types in latest season (raw SQL — no N+1) ───────────
 
-  let latestSeasonId: string | null = latestSeasonMember?.seasonId ?? null;
   let distinctActivityTypesInLatestSeason = 0;
 
   if (latestSeasonId) {
-    const activitySeasons = await prisma.activitySeason.findMany({
-      where: {
-        seasonId: latestSeasonId,
-        activity: {
-          userId,
-        },
-      },
-      select: {
-        activity: {
-          select: {
-            type: true,
-          },
-        },
-      },
-    });
-
-    const distinctTypes = new Set<string>();
-
-    for (const row of activitySeasons as any[]) {
-      const type = row.activity?.type;
-      if (type) distinctTypes.add(type);
-    }
-
-    distinctActivityTypesInLatestSeason = distinctTypes.size;
+    const rows = await prisma.$queryRaw<Array<{ type: string }>>`
+      SELECT DISTINCT a.type
+      FROM activityseason acs
+      JOIN activity a ON acs.activityId = a.id
+      WHERE acs.seasonId = ${latestSeasonId}
+        AND a.userId    = ${userId}
+        AND a.isDeleted = 0
+    `;
+    distinctActivityTypesInLatestSeason = rows.length;
   }
 
   return {
