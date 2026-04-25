@@ -7,7 +7,7 @@ type NavbarProps = {
 
 export default function Navbar({ userName, photoUrl }: NavbarProps) {
   return (
-    <header className="w-full h-14 px-6 bg-[#3b4f6c]">
+    <header className="w-full h-14 px-6 t-navbar">
       <div className="mx-auto max-w-7xl h-full flex items-center justify-between">
         {/* Logo */}
         <a

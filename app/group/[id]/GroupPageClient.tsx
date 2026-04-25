@@ -273,7 +273,7 @@ export default function GroupPageClient({
 
   return (
     <>
-      <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+      <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
         <div className="mx-auto max-w-7xl space-y-4">
           <div className="flex items-center justify-between gap-3">
             <a

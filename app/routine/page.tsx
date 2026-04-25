@@ -100,7 +100,7 @@ export default function RoutinesPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+      <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
         <div className="mx-auto max-w-4xl rounded-2xl bg-slate-800 p-6 shadow-lg">
           Cargando rutinas...
         </div>
@@ -109,7 +109,7 @@ export default function RoutinesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+    <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button

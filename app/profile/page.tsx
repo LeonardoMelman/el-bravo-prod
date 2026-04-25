@@ -432,7 +432,7 @@ export default async function ProfilePage() {
   const stats = computeProfileStats(activities, profileWeeklyGoal);
 
   return (
-    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+    <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center">

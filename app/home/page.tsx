@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import LogoutButton from "@/src/components/LogoutButton";
 import JoinGroupModal from "@/src/components/JoinGroupModal";
+import ThemeSelectorHome from "@/src/components/ThemeSelectorHome";
 import { prisma } from "@/src/lib/db";
 
 type ActivityForHome = {
@@ -281,8 +282,9 @@ export default async function HomePage() {
   const filledDots = Math.min(stats.workoutsThisWeek, 7);
 
   return (
-    <main className="min-h-screen bg-[#08142d] px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
+    <main className="t-page-bg min-h-screen px-3 py-4 text-white sm:px-4 sm:py-5 md:p-6">
       <div className="mx-auto max-w-5xl">
+        <ThemeSelectorHome position="top" />
         <section className="rounded-[22px] bg-slate-800/80 p-3 shadow-2xl sm:rounded-[28px] sm:p-5 md:p-6">
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <a href="/profile" className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -534,6 +536,7 @@ export default async function HomePage() {
             )}
           </section>
         </section>
+        <ThemeSelectorHome position="bottom" />
       </div>
     </main>
   );
