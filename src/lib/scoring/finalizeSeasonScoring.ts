@@ -1,10 +1,11 @@
 import { getSeasonLeaderboard } from "@/src/lib/scoring/getSeasonLeaderboard";
+import { Prisma } from "@prisma/client";
 
 const PERFECT_STREAK_FINAL_BONUS_TOTAL = 600;
 const LONGEST_SESSION_FINAL_BONUS_TOTAL = 400;
 
 type Params = {
-  tx: any;
+  tx: Prisma.TransactionClient;
   seasonId: string;
 };
 

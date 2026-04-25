@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
+import { Prisma } from "@prisma/client";
 import {
   diffInFullDays,
   getCurrentConsecutiveWeekStreak,
@@ -169,7 +170,7 @@ export async function POST(req: Request) {
     // events. Scoring recalculation (week progress + bonus events) is done
     // asynchronously after the response so it does NOT block the user.
     const result = await prisma.$transaction(
-      async (tx: any) => {
+      async (tx: Prisma.TransactionClient) => {
         const activityCategory = await tx.activityCategory.findUnique({
           where: { id: activityCategoryId },
           select: { id: true, slug: true, name: true },
