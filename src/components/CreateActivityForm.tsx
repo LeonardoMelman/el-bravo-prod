@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import WorkoutCompletionModal from "@/src/components/WorkoutCompletionModal";
 
 type ExerciseMeasureType = "reps" | "duration";
 
@@ -140,6 +141,10 @@ export default function CreateActivityForm() {
   const [error, setError] = useState("");
   const [updateRoutineMessage, setUpdateRoutineMessage] = useState("");
   const [loadingData, setLoadingData] = useState(true);
+  const [completedActivity, setCompletedActivity] = useState<{
+    activityId: string;
+    initialPoints: Array<{ seasonId: string; points: number }>;
+  } | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -794,13 +799,28 @@ export default function CreateActivityForm() {
         return;
       }
 
-      window.history.back();
+      setCompletedActivity({
+        activityId: data.activityId,
+        initialPoints: Array.isArray(data.createdScoreEvents)
+          ? data.createdScoreEvents
+          : [],
+      });
     } catch (err) {
       console.error("Error creando actividad:", err);
       setError("Ocurrió un error de red al guardar la actividad.");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (completedActivity) {
+    return (
+      <WorkoutCompletionModal
+        activityId={completedActivity.activityId}
+        initialPoints={completedActivity.initialPoints}
+        onClose={() => window.history.back()}
+      />
+    );
   }
 
   return (

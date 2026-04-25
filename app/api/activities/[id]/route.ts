@@ -8,6 +8,7 @@ import {
 } from "@/src/lib/scoring/weekUtils";
 import { calculateActivityScore } from "@/src/lib/scoring/calculateActivityScore";
 import { recalculateUserSeasonScoring } from "@/src/lib/scoring/recalculateUserSeasonScoring";
+import { evaluateAndSyncAwards } from "@/src/lib/awards/evaluateAndSyncAwards";
 
 type LegacyActivityType = "gym" | "run" | "sport" | "mobility" | "other";
 
@@ -93,22 +94,25 @@ async function runScoringAsync(
   label: string,
   t0: number
 ) {
-  if (seasonIds.length === 0) return;
   const tStart = Date.now();
   try {
-    const seasons = await prisma.season.findMany({
-      where: { id: { in: seasonIds } },
-      select: { id: true, weeklyGoal: true },
-    });
-    for (const season of seasons) {
-      await recalculateUserSeasonScoring({
-        db: prisma,
-        userId,
-        seasonId: season.id,
-        weeklyGoal: season.weeklyGoal,
-        label,
+    if (seasonIds.length > 0) {
+      const seasons = await prisma.season.findMany({
+        where: { id: { in: seasonIds } },
+        select: { id: true, weeklyGoal: true },
       });
+      for (const season of seasons) {
+        await recalculateUserSeasonScoring({
+          db: prisma,
+          userId,
+          seasonId: season.id,
+          weeklyGoal: season.weeklyGoal,
+          label,
+        });
+      }
     }
+    // Re-evaluate awards after any activity change (edit or delete can revoke/unlock)
+    await evaluateAndSyncAwards(userId, null);
     console.log(
       `[activity/${label}] async scoring done ${Date.now() - tStart}ms | wall ${Date.now() - t0}ms`
     );

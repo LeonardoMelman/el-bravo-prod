@@ -234,7 +234,7 @@ function KpiCard({ value, label, curr, prev }) {
         <span className="text-3xl font-bold text-white leading-none">{value}</span>
         {changeEl}
       </div>
-      <p className="text-xs text-gray-400 mt-1.5">{label}</p>
+      <p className="text-m text-gray-400 mt-1.5">{label}</p>
     </div>
   );
 }
@@ -644,29 +644,11 @@ export default function StatsPage() {
             >
               ←
             </a>
-            <h1 className="text-xl font-bold tracking-tight">estadísticas</h1>
+            <h1 className="text-xl font-bold tracking-tight">Estadísticas</h1>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap justify-end flex-1">
-            {userName && (
-              <span className="hidden sm:flex items-center gap-2 text-sm text-gray-300 shrink-0">
-                Hola,{" "}
-                <span className="font-semibold text-white">
-                  {userName.split(" ")[0]}
-                </span>
-                {userPhoto ? (
-                  <img
-                    src={userPhoto}
-                    className="w-7 h-7 rounded-full object-cover"
-                    alt={userName}
-                  />
-                ) : (
-                  <div className="t-accent-surface flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold">
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </span>
-            )}
+
             <StatsFilter filter={filter} onChange={setFilter} />
           </div>
         </div>

@@ -57,7 +57,7 @@ export default function JoinGroupModal({
   }
 
   return (
-    <div className="w-full sm:w-auto">
+    <div className="w-3em">
       <button
         type="button"
         onClick={() => setOpen(true)}

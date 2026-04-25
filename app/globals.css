@@ -208,3 +208,24 @@ body {
 .scrollbar-elbravo::-webkit-scrollbar-corner {
   background: #0f172a;
 }
+
+/* ─── Workout completion modal animations ────────────────────────────────── */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes confettiFall {
+  0%   { transform: translateY(-8px) rotate(0deg) scale(1);   opacity: 1; }
+  100% { transform: translateY(130px) rotate(720deg) scale(0.4); opacity: 0; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.75); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(163, 230, 53, 0); }
+  50%       { box-shadow: 0 0 18px 5px rgba(163, 230, 53, 0.28); }
+}

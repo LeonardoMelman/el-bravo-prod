@@ -8,6 +8,7 @@ import {
 } from "@/src/lib/scoring/weekUtils";
 import { calculateActivityScore } from "@/src/lib/scoring/calculateActivityScore";
 import { recalculateUserSeasonScoring } from "@/src/lib/scoring/recalculateUserSeasonScoring";
+import { evaluateAndSyncAwards } from "@/src/lib/awards/evaluateAndSyncAwards";
 
 type LegacyActivityType = "gym" | "run" | "sport" | "mobility" | "other";
 
@@ -357,7 +358,7 @@ export async function POST(req: Request) {
     // Respond immediately. Scoring runs in the background in the same Node.js
     // process. Safe for long-lived servers (next start). For Vercel/serverless
     // use waitUntil from @vercel/functions instead.
-    void runScoringAsync(user.id, result.seasonsForRecalc, t0);
+    void runScoringAsync(user.id, result.seasonsForRecalc, result.activityId, t0);
 
     return NextResponse.json(
       { ok: true, activityId: result.activityId, createdScoreEvents: result.createdScoreEvents },
@@ -375,6 +376,7 @@ export async function POST(req: Request) {
 async function runScoringAsync(
   userId: string,
   seasons: Array<{ seasonId: string; weeklyGoal: number }>,
+  activityId: string,
   t0: number
 ) {
   const tStart = Date.now();
@@ -388,6 +390,7 @@ async function runScoringAsync(
         label: "create",
       });
     }
+    await evaluateAndSyncAwards(userId, activityId);
     console.log(`[activity/create] async scoring done ${Date.now() - tStart}ms | wall ${Date.now() - t0}ms`);
   } catch (err) {
     console.error("[activity/create] async scoring failed:", err);

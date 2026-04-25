@@ -1,8 +1,15 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Rubik } from "next/font/google";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import AppNavbarShell from "@/src/components/AppNavbarShell";
 import ThemeProvider from "@/src/components/ThemeProvider";
+
+const rubik = Rubik({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-rubik",
+});
 
 export const metadata: Metadata = {
   title: "El Bravo",
@@ -19,7 +26,6 @@ export default async function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Anti-flash: apply stored theme before React hydrates to avoid color flicker */}
         <script
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
@@ -27,7 +33,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className="text-white">
+      <body className={`${rubik.className} text-white`}>
         <ThemeProvider>
           {user ? (
             <AppNavbarShell

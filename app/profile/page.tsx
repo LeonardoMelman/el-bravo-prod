@@ -4,6 +4,7 @@ import LogoutButton from "@/src/components/LogoutButton";
 import { prisma } from "@/src/lib/db";
 import { evaluateAwardsForUser } from "@/src/lib/awards/evaluateAwards";
 import DeleteActivityButton from "@/src/components/DeleteActivityButton";
+import BadgesSection from "@/src/components/BadgesSection";
 
 type ActivityExerciseItem = {
   id: string;
@@ -279,37 +280,6 @@ function getTypeLabel(type: string) {
   }
 }
 
-function getAwardShortLabel(name: string) {
-  if (name.length <= 12) return name;
-  return `${name.slice(0, 12)}…`;
-}
-
-function getAwardRingClasses(level: number | null) {
-  switch (level) {
-    case 3:
-      return {
-        border: "border-yellow-400",
-        bg: "bg-yellow-500/10",
-        text: "text-yellow-300",
-        glow: "shadow-[0_0_18px_rgba(250,204,21,0.25)]",
-      };
-    case 2:
-      return {
-        border: "border-slate-300",
-        bg: "bg-slate-200/10",
-        text: "text-slate-200",
-        glow: "shadow-[0_0_18px_rgba(226,232,240,0.18)]",
-      };
-    case 1:
-    default:
-      return {
-        border: "border-amber-600",
-        bg: "bg-amber-700/10",
-        text: "text-amber-300",
-        glow: "shadow-[0_0_18px_rgba(217,119,6,0.2)]",
-      };
-  }
-}
 
 function ProfileStatCard({
   label,
@@ -425,14 +395,6 @@ export default async function ProfilePage() {
   const routines = routinesRaw as unknown as RoutineItem[];
   const evaluatedAwards = evaluatedAwardsRaw as ProfileAwardItem[];
 
-  const earnedAwards = evaluatedAwards
-    .filter((award) => award.earned)
-    .sort((a, b) => {
-      const levelDiff = (b.level ?? 0) - (a.level ?? 0);
-      if (levelDiff !== 0) return levelDiff;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 6);
 
   const profileWeeklyGoal = (dbUser as any).weeklyGoal ?? 3;
   const stats = computeProfileStats(activities, profileWeeklyGoal);
@@ -534,57 +496,7 @@ export default async function ProfilePage() {
               </div>
 
               <div className="rounded-2xl bg-slate-900/70 p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                    Badges / awards
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    {earnedAwards.length} ganadas
-                  </div>
-                </div>
-
-                <div className="grid min-h-[220px] grid-cols-2 place-items-center gap-x-4 gap-y-6 sm:grid-cols-3">
-                  {Array.from({ length: 6 }).map((_, index) => {
-                    const award = earnedAwards[index];
-
-                    if (!award) {
-                      return (
-                        <div
-                          key={`empty-award-${index}`}
-                          className="flex w-full flex-col items-center justify-center gap-3"
-                        >
-                          <div className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-slate-500 bg-slate-800/80">
-                            <div className="h-10 w-10 rounded-full border-2 border-slate-600" />
-                          </div>
-
-                          <span className="text-center text-xs text-slate-500">Vacía</span>
-                        </div>
-                      );
-                    }
-
-                    const ring = getAwardRingClasses(award.level);
-
-                    return (
-                      <div
-                        key={award.code}
-                        className="flex w-full flex-col items-center justify-center gap-3"
-                      >
-                        <div
-                          title={award.description}
-                          className={`flex h-20 w-20 items-center justify-center rounded-full border-4 ${ring.border} ${ring.bg} ${ring.text} ${ring.glow} transition-transform hover:scale-105`}
-                        >
-                          <span className="px-1 text-center text-[10px] font-bold leading-tight">
-                            {getAwardShortLabel(award.name)}
-                          </span>
-                        </div>
-
-                        <span className="text-center text-xs text-slate-300">
-                          {award.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <BadgesSection awards={evaluatedAwards} />
               </div>
             </div>
 

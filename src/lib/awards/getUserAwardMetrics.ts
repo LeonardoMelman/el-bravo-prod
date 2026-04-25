@@ -9,9 +9,11 @@ type UserAwardMetrics = {
   activityTypeWeekStreaks: Record<ActivityType, number>;
   perfectWeekStreak: number;
   weekendActivityStreak: number;
+  consecutiveActiveWeekStreak: number;
 
   muscleGroupRolling30Days: Record<string, number>;
 
+  totalActivitiesCount: number;
   distinctActivityTypesInLatestSeason: number;
   latestSeasonId: string | null;
 };
@@ -245,8 +247,11 @@ export async function getUserAwardMetrics(userId: string): Promise<UserAwardMetr
     .filter(([, count]) => count >= weeklyGoal)
     .map(([weekKey]) => weekKey);
 
+  const activeWeekKeys = [...activityCountByWeek.keys()];
+
   const perfectWeekStreak = getCurrentConsecutiveStreak(perfectWeekKeys);
   const weekendActivityStreak = getCurrentConsecutiveWeekendStreak(weekendKeys);
+  const consecutiveActiveWeekStreak = getCurrentConsecutiveStreak(activeWeekKeys);
 
   // ── Muscle group rolling 30 days (bounded to recent activities only) ───────
 
@@ -283,7 +288,9 @@ export async function getUserAwardMetrics(userId: string): Promise<UserAwardMetr
     activityTypeWeekStreaks,
     perfectWeekStreak,
     weekendActivityStreak,
+    consecutiveActiveWeekStreak,
     muscleGroupRolling30Days,
+    totalActivitiesCount: activities.length,
     distinctActivityTypesInLatestSeason,
     latestSeasonId,
   };

@@ -26,6 +26,14 @@ type AwardCriteria =
       kind: "distinct_activity_types_in_season";
       target: number;
       allowedTypes?: string[];
+    }
+  | {
+      kind: "consecutive_weeks_any_activity";
+      target: number;
+    }
+  | {
+      kind: "total_activities_milestone";
+      target: number;
     };
 
 export type EvaluatedAward = {
@@ -61,6 +69,8 @@ function isAwardCriteria(value: unknown): value is AwardCriteria {
     "weekend_activity_streak",
     "muscle_group_activities_rolling_days",
     "distinct_activity_types_in_season",
+    "consecutive_weeks_any_activity",
+    "total_activities_milestone",
   ].includes(kind);
 }
 
@@ -133,6 +143,26 @@ function evaluateFromCriteria(
         progressTarget,
         earned: progressCurrent >= progressTarget,
         seasonId: metrics.latestSeasonId,
+      };
+    }
+
+    case "consecutive_weeks_any_activity": {
+      const progressCurrent = metrics.consecutiveActiveWeekStreak;
+      return {
+        progressCurrent,
+        progressTarget: criteria.target,
+        earned: progressCurrent >= criteria.target,
+        seasonId: null,
+      };
+    }
+
+    case "total_activities_milestone": {
+      const progressCurrent = metrics.totalActivitiesCount;
+      return {
+        progressCurrent,
+        progressTarget: criteria.target,
+        earned: progressCurrent >= criteria.target,
+        seasonId: null,
       };
     }
 
