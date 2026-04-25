@@ -339,13 +339,17 @@ export default async function ProfilePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-
-  if (!dbUser) redirect("/home");
-
-  const [activitiesRaw, membershipsRaw, routinesRaw, evaluatedAwardsRaw] = await Promise.all([
+  const [dbUserRaw, activitiesRaw, membershipsRaw, routinesRaw, evaluatedAwardsRaw] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        photoUrl: true,
+        weeklyGoal: true,
+      },
+    }),
     prisma.activity.findMany({
       where: {
         userId: user.id,
@@ -413,6 +417,9 @@ export default async function ProfilePage() {
     evaluateAwardsForUser(user.id),
   ]);
 
+  const dbUser = dbUserRaw;
+  if (!dbUser) redirect("/home");
+
   const activities = activitiesRaw as unknown as ActivityForStats[];
   const memberships = membershipsRaw as unknown as MembershipItem[];
   const routines = routinesRaw as unknown as RoutineItem[];
@@ -427,8 +434,7 @@ export default async function ProfilePage() {
     })
     .slice(0, 6);
 
-  const profileWeeklyGoal =
-    (dbUser as typeof dbUser & { weeklyGoal?: number | null }).weeklyGoal ?? 3;
+  const profileWeeklyGoal = (dbUser as any).weeklyGoal ?? 3;
   const stats = computeProfileStats(activities, profileWeeklyGoal);
 
   return (

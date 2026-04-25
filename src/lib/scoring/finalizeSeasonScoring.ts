@@ -1,7 +1,7 @@
 import { getSeasonLeaderboard } from "@/src/lib/scoring/getSeasonLeaderboard";
 
-const PERFECT_STREAK_FINAL_BONUS_TOTAL = 60;
-const LONGEST_SESSION_FINAL_BONUS_TOTAL = 40;
+const PERFECT_STREAK_FINAL_BONUS_TOTAL = 600;
+const LONGEST_SESSION_FINAL_BONUS_TOTAL = 400;
 
 type Params = {
   tx: any;

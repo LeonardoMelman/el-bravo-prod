@@ -44,6 +44,7 @@ export default function CreateSeasonPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [minPerWeek, setMinPerWeek] = useState(2);
+  const [minDuration, setMinDuration] = useState(1);
   const [allowedActivityCategoryIds, setAllowedActivityCategoryIds] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -176,6 +177,9 @@ export default function CreateSeasonPage() {
       if (!Number.isFinite(minPerWeek) || minPerWeek < 1 || minPerWeek > 7) {
         return "El objetivo debe estar entre 1 y 7";
       }
+      if (!Number.isInteger(minDuration) || minDuration < 1 || minDuration > 300) {
+        return "La duración mínima debe estar entre 1 y 300 minutos";
+      }
     }
 
     if (currentStep === 3) {
@@ -219,6 +223,7 @@ export default function CreateSeasonPage() {
           startDate,
           endDate,
           minPerWeek,
+          minDuration,
           allowedActivityCategoryIds,
           description,
         }),
@@ -352,22 +357,42 @@ export default function CreateSeasonPage() {
             )}
 
             {step === 2 && (
-              <div className="max-w-sm">
-                <label className="mb-2 block text-sm font-semibold text-slate-200">
-                  Objetivo semanal
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={7}
-                  value={minPerWeek}
-                  onChange={(e) => setMinPerWeek(Number(e.target.value))}
-                  onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-                  className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
-                />
-                <p className="mt-2 text-sm text-slate-400">
-                  Cantidad mínima de entrenamientos por semana para cumplir el objetivo.
-                </p>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Objetivo semanal
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={minPerWeek}
+                    onChange={(e) => setMinPerWeek(Number(e.target.value))}
+                    onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
+                  />
+                  <p className="mt-2 text-sm text-slate-400">
+                    Cantidad mínima de entrenamientos por semana para cumplir el objetivo.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-200">
+                    Duración mínima (minutos)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={minDuration}
+                    onChange={(e) => setMinDuration(Number(e.target.value))}
+                    onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                    className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
+                  />
+                  <p className="mt-2 text-sm text-slate-400">
+                    Las actividades más cortas no cuentan para racha ni puntaje.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -420,6 +445,13 @@ export default function CreateSeasonPage() {
                     <div className="text-sm text-slate-400">Objetivo semanal</div>
                     <div className="mt-1 font-semibold text-white">
                       {minPerWeek} entrenamiento{minPerWeek === 1 ? "" : "s"} por semana
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-800 p-4">
+                    <div className="text-sm text-slate-400">Duración mínima</div>
+                    <div className="mt-1 font-semibold text-white">
+                      {minDuration} minuto{minDuration === 1 ? "" : "s"}
                     </div>
                   </div>
 

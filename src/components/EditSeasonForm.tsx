@@ -17,6 +17,7 @@ type EditSeasonFormProps = {
   initialStartDate: string;
   initialEndDate: string;
   initialWeeklyGoal: number;
+  initialMinDuration: number;
   initialAllowedActivityCategoryIds: string[];
 };
 
@@ -28,6 +29,7 @@ export default function EditSeasonForm({
   initialStartDate,
   initialEndDate,
   initialWeeklyGoal,
+  initialMinDuration,
   initialAllowedActivityCategoryIds,
 }: EditSeasonFormProps) {
   const router = useRouter();
@@ -37,6 +39,7 @@ export default function EditSeasonForm({
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
   const [minPerWeek, setMinPerWeek] = useState(initialWeeklyGoal);
+  const [minDuration, setMinDuration] = useState(initialMinDuration);
   const [allowedActivityCategoryIds, setAllowedActivityCategoryIds] = useState<string[]>(
     initialAllowedActivityCategoryIds
   );
@@ -121,6 +124,11 @@ export default function EditSeasonForm({
       return;
     }
 
+    if (!Number.isInteger(minDuration) || minDuration < 1 || minDuration > 300) {
+      setError("La duración mínima debe estar entre 1 y 300 minutos");
+      return;
+    }
+
     if (allowedActivityCategoryIds.length === 0) {
       setError("Tenés que seleccionar al menos un tipo de actividad permitido");
       return;
@@ -142,6 +150,7 @@ export default function EditSeasonForm({
           startDate,
           endDate,
           minPerWeek,
+          minDuration,
           allowedActivityCategoryIds,
         }),
       });
@@ -198,7 +207,7 @@ export default function EditSeasonForm({
       <div className="rounded-2xl bg-slate-900/70 p-5">
         <h2 className="mb-4 text-xl font-semibold text-white">Fechas y objetivo</h2>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-semibold text-slate-200">
               Fecha de inicio
@@ -236,6 +245,26 @@ export default function EditSeasonForm({
               onChange={(e) => setMinPerWeek(Number(e.target.value))}
               className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Cantidad mínima de actividades por semana para cumplir el objetivo.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-slate-200">
+              Duración mínima (minutos)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={minDuration}
+              onChange={(e) => setMinDuration(Number(e.target.value))}
+              className="w-full rounded-xl border border-slate-600 bg-slate-700 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-lime-500/60"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Las actividades más cortas no cuentan para racha ni puntaje.
+            </p>
           </div>
         </div>
       </div>

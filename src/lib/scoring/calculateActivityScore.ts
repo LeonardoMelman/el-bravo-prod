@@ -14,6 +14,7 @@ type ActivityScoreSeasonInput = {
   basePointsPerActivity: number;
   allowedActivityTypes?: unknown;
   maxScoreableMinutesPerActivity?: number | null;
+  minDuration?: number | null;
 };
 
 type CalculateActivityScoreInput = {
@@ -132,8 +133,8 @@ function getConsistencyMultiplier(
 
 function getComebackBonus(daysSincePreviousActivity: number | null) {
   if (daysSincePreviousActivity === null) return 0;
-  if (daysSincePreviousActivity >= 56) return 15;
-  if (daysSincePreviousActivity >= 28) return 10;
+  if (daysSincePreviousActivity >= 56) return 150;
+  if (daysSincePreviousActivity >= 28) return 100;
   return 0;
 }
 
@@ -179,6 +180,41 @@ export function calculateActivityScore(
   }
 
   const rawDurationMinutes = getDurationMinutes(activity);
+
+  const minDuration =
+    typeof season.minDuration === "number" &&
+    Number.isFinite(season.minDuration) &&
+    season.minDuration > 0
+      ? Math.round(season.minDuration)
+      : 1;
+
+  if (rawDurationMinutes < minDuration) {
+    return {
+      eligible: false,
+      totalPoints: 0,
+      basePoints: season.basePointsPerActivity,
+      durationMinutesUsed: 0,
+      durationMultiplier: 0,
+      consistencyMultiplier: 1,
+      comebackBonus: 0,
+      reason: "below_min_duration",
+      metadata: {
+        activityType: activity.type,
+        rawDurationMinutes,
+        durationMinutesUsed: 0,
+        weeklyGoal: season.weeklyGoal,
+        basePointsPerActivity: season.basePointsPerActivity,
+        durationMultiplier: 0,
+        consistencyMultiplier: 1,
+        currentActiveWeekStreak,
+        currentPerfectWeekStreak,
+        daysSincePreviousActivity,
+        comebackBonus: 0,
+        allowedActivityTypes: null,
+      },
+    };
+  }
+
   const durationMinutesUsed = applyActivityDurationCap(
     rawDurationMinutes,
     season.maxScoreableMinutesPerActivity

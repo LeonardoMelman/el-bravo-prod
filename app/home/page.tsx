@@ -7,8 +7,6 @@ import { prisma } from "@/src/lib/db";
 
 type ActivityForHome = {
   startedAt: Date;
-  endedAt: Date;
-  durationMinutes: number | null;
 };
 
 type HomeRoutineItem = {
@@ -71,7 +69,7 @@ function getWeekKey(date: Date) {
 function computeHomeStats(
   activities: ActivityForHome[],
   weeklyGoal: number
-) {
+): { activeWeeks: number; perfectWeeks: number; workoutsThisWeek: number } {
   const now = new Date();
   const currentWeekKey = getWeekKey(now);
   const currentWeekStart = getWeekStart(now);
@@ -168,22 +166,17 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      photoUrl: true,
-      weeklyGoal: true,
-    },
-  });
-
-  if (!dbUser) {
-    redirect("/login");
-  }
-
-  const [membershipsRaw, routinesRaw, activitiesRaw] = await Promise.all([
+  const [dbUserRaw, membershipsRaw, routinesRaw, activitiesRaw] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        photoUrl: true,
+        weeklyGoal: true,
+      },
+    }),
     prisma.groupMember.findMany({
       where: {
         userId: user.id,
@@ -258,11 +251,14 @@ export default async function HomePage() {
       },
       select: {
         startedAt: true,
-        endedAt: true,
-        durationMinutes: true,
       },
     }),
   ]);
+
+  const dbUser = dbUserRaw;
+  if (!dbUser) {
+    redirect("/login");
+  }
 
   const memberships = membershipsRaw as unknown as HomeMembershipItem[];
   const routines = routinesRaw as unknown as HomeRoutineItem[];

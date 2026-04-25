@@ -2,14 +2,12 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/src/lib/currentUser";
 import { prisma } from "@/src/lib/db";
 import {
-  buildWeekCounts,
   diffInFullDays,
   getCurrentConsecutiveWeekStreak,
   startOfWeekMonday,
 } from "@/src/lib/scoring/weekUtils";
 import { calculateActivityScore } from "@/src/lib/scoring/calculateActivityScore";
-import { recalculateSeasonWeekProgress } from "@/src/lib/scoring/recalculateSeasonWeekProgress";
-import { applyWeeklyBonuses } from "@/src/lib/scoring/applyWeeklyBonuses";
+import { recalculateUserSeasonScoring } from "@/src/lib/scoring/recalculateUserSeasonScoring";
 
 type LegacyActivityType = "gym" | "run" | "sport" | "mobility" | "other";
 
@@ -30,10 +28,11 @@ type AllowedActivityTypeLink = {
   activityCategoryId: string;
 };
 
-type PreviousLinkedActivityEntry = {
-  activity: {
-    startedAt: Date;
-  };
+// Raw SQL row returned for previous-activity week counts inside the tx.
+type PrevWeekRow = {
+  weekStart: Date | string;
+  weekCount: number | bigint;
+  maxStartedAt: Date | null;
 };
 
 type CandidateSeasonEntry = {
@@ -42,6 +41,7 @@ type CandidateSeasonEntry = {
   basePointsPerActivity: number;
   weeklyStreakBonus: number;
   perfectWeekBonus: number;
+  minDuration: number | null;
   allowedActivityTypeLinks: AllowedActivityTypeLink[];
   maxScoreableMinutesPerActivity: number | null;
 };
@@ -51,14 +51,8 @@ type CreatedScoreEventEntry = {
   points: number;
 };
 
-type SeasonPostProcessingEntry = {
-  seasonId: string;
-  weeklyGoal: number;
-};
-
 class ActivityCreateHttpError extends Error {
   status: number;
-
   constructor(status: number, message: string) {
     super(message);
     this.status = status;
@@ -95,144 +89,91 @@ function mapCategorySlugToLegacyType(slug: string): LegacyActivityType {
   }
 }
 
-function normalizeAllowedActivityCategoryIds(
-  links: AllowedActivityTypeLink[]
-): string[] {
+function normalizeAllowedActivityCategoryIds(links: AllowedActivityTypeLink[]): string[] {
   const ids = new Set<string>();
-
-  for (const link of links) {
-    ids.add(link.activityCategoryId);
-  }
-
+  for (const link of links) ids.add(link.activityCategoryId);
   return Array.from(ids);
 }
 
 function parseNullableNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+// Convert DATE/DATETIME raw SQL result to a JS Date safely.
+function toDate(val: Date | string | null | undefined): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  const s = String(val);
+  return new Date(s.includes("T") ? s : s + "T00:00:00.000Z");
+}
+
 export async function POST(req: Request) {
+  const t0 = Date.now();
+
   try {
     const user = await getCurrentUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-
-    const {
-      startedAt,
-      endedAt,
-      notes,
-      activityCategoryId,
-      routineId,
-      exercises = [],
-    } = body ?? {};
+    const { startedAt, endedAt, notes, activityCategoryId, routineId, exercises = [] } = body ?? {};
 
     if (!startedAt || !endedAt) {
-      return NextResponse.json(
-        { error: "Start and end required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Start and end required" }, { status: 400 });
     }
-
     if (!activityCategoryId || typeof activityCategoryId !== "string") {
-      return NextResponse.json(
-        { error: "Missing activityCategoryId" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing activityCategoryId" }, { status: 400 });
     }
 
     const s = new Date(startedAt);
     const e = new Date(endedAt);
-
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || s >= e) {
       return NextResponse.json({ error: "Invalid dates" }, { status: 400 });
     }
 
-    const durationMinutes = Math.max(
-      0,
-      Math.round((e.getTime() - s.getTime()) / (1000 * 60))
-    );
-
+    const durationMinutes = Math.max(0, Math.round((e.getTime() - s.getTime()) / (1000 * 60)));
     const normalizedExercises = exercises as CreateActivityExerciseInput[];
 
     for (const item of normalizedExercises) {
       if (!item?.exerciseId || typeof item.exerciseId !== "string") {
-        return NextResponse.json(
-          { error: "Invalid exerciseId" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid exerciseId" }, { status: 400 });
       }
-
       const sets = Number(item.sets);
       const reps = parseNullableNumber(item.reps);
       const durationSeconds = parseNullableNumber(item.durationSeconds);
       const weightKg = parseNullableNumber(item.weightKg);
 
       if (!Number.isFinite(sets) || sets <= 0) {
-        return NextResponse.json(
-          { error: "Invalid sets value" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid sets value" }, { status: 400 });
       }
-
       if (reps !== null && (!Number.isFinite(reps) || reps <= 0)) {
-        return NextResponse.json(
-          { error: "Invalid reps value" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid reps value" }, { status: 400 });
       }
-
-      if (
-        durationSeconds !== null &&
-        (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
-      ) {
-        return NextResponse.json(
-          { error: "Invalid durationSeconds value" },
-          { status: 400 }
-        );
+      if (durationSeconds !== null && (!Number.isFinite(durationSeconds) || durationSeconds <= 0)) {
+        return NextResponse.json({ error: "Invalid durationSeconds value" }, { status: 400 });
       }
-
       if (reps === null && durationSeconds === null) {
-        return NextResponse.json(
-          { error: "Each exercise must define reps or durationSeconds" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Each exercise must define reps or durationSeconds" }, { status: 400 });
       }
-
       if (reps !== null && durationSeconds !== null) {
-        return NextResponse.json(
-          { error: "Each exercise must define only reps or durationSeconds" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Each exercise must define only reps or durationSeconds" }, { status: 400 });
       }
-
       if (weightKg !== null && (!Number.isFinite(weightKg) || weightKg < 0)) {
-        return NextResponse.json(
-          { error: "Invalid weightKg value" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid weightKg value" }, { status: 400 });
       }
     }
 
+    // ── Short write transaction ──────────────────────────────────────────────
+    // Creates the activity record, exercises, season links, and base score
+    // events. Scoring recalculation (week progress + bonus events) is done
+    // asynchronously after the response so it does NOT block the user.
     const result = await prisma.$transaction(
       async (tx: any) => {
         const activityCategory = await tx.activityCategory.findUnique({
           where: { id: activityCategoryId },
-          select: {
-            id: true,
-            slug: true,
-            name: true,
-          },
+          select: { id: true, slug: true, name: true },
         });
-
         if (!activityCategory) {
           throw new ActivityCreateHttpError(400, "Invalid activity category");
         }
@@ -246,98 +187,52 @@ export async function POST(req: Request) {
             startedAt: s,
             endedAt: e,
             durationMinutes,
-            notes:
-              typeof notes === "string" && notes.trim().length > 0
-                ? notes.trim()
-                : null,
+            notes: typeof notes === "string" && notes.trim().length > 0 ? notes.trim() : null,
             type: normalizedType,
             activityCategoryId: activityCategory.id,
-            routineId:
-              typeof routineId === "string" && routineId.trim().length > 0
-                ? routineId.trim()
-                : null,
+            routineId: typeof routineId === "string" && routineId.trim().length > 0 ? routineId.trim() : null,
           },
         });
 
         const exerciseIdsSet = new Set<string>();
-        for (const item of normalizedExercises) {
-          exerciseIdsSet.add(item.exerciseId);
-        }
+        for (const item of normalizedExercises) exerciseIdsSet.add(item.exerciseId);
         const exerciseIds = Array.from(exerciseIdsSet);
 
         const existingExercisesRaw = await tx.exercise.findMany({
-          where: {
-            id: { in: exerciseIds },
-          },
-          select: {
-            id: true,
-            measureType: true,
-          },
+          where: { id: { in: exerciseIds } },
+          select: { id: true, measureType: true },
         });
-
         const existingExercises = existingExercisesRaw as ExistingExerciseEntry[];
 
         if (existingExercises.length !== exerciseIds.length) {
-          throw new ActivityCreateHttpError(
-            400,
-            "One or more exercises do not exist"
-          );
+          throw new ActivityCreateHttpError(400, "One or more exercises do not exist");
         }
 
         const exerciseById = new Map<string, ExistingExerciseEntry>();
-        for (const exercise of existingExercises) {
-          exerciseById.set(exercise.id, exercise);
-        }
+        for (const ex of existingExercises) exerciseById.set(ex.id, ex);
 
-        const activityExercisesData: Array<{
-          activityId: string;
-          exerciseId: string;
-          sets: number;
-          reps: number | null;
-          durationSeconds: number | null;
-          weightKg: number | null;
-        }> = [];
-
-        for (const item of normalizedExercises) {
-          const exercise = exerciseById.get(item.exerciseId);
-
-          if (!exercise) {
-            throw new ActivityCreateHttpError(
-              400,
-              "One or more exercises do not exist"
-            );
-          }
-
-          const reps = parseNullableNumber(item.reps);
-          const durationSeconds = parseNullableNumber(item.durationSeconds);
-          const weightKg = parseNullableNumber(item.weightKg);
-
-          activityExercisesData.push({
+        const activityExercisesData = normalizedExercises.map((item) => {
+          const ex = exerciseById.get(item.exerciseId)!;
+          return {
             activityId: activity.id,
             exerciseId: item.exerciseId,
             sets: Number(item.sets),
-            reps: exercise.measureType === "reps" ? reps : null,
-            durationSeconds:
-              exercise.measureType === "duration" ? durationSeconds : null,
-            weightKg,
-          });
-        }
-
-        await tx.activityExercise.createMany({
-          data: activityExercisesData,
+            reps: ex.measureType === "reps" ? parseNullableNumber(item.reps) : null,
+            durationSeconds: ex.measureType === "duration" ? parseNullableNumber(item.durationSeconds) : null,
+            weightKg: parseNullableNumber(item.weightKg),
+          };
         });
+
+        if (activityExercisesData.length > 0) {
+          await tx.activityExercise.createMany({ data: activityExercisesData });
+        }
 
         const candidateSeasonsRaw = await tx.season.findMany({
           where: {
             isActive: true,
             startDate: { lte: s },
             endDate: { gte: s },
-            members: {
-              some: {
-                userId: user.id,
-                leftAt: null,
-              },
-            },
+            members: { some: { userId: user.id, leftAt: null } },
           },
           select: {
             id: true,
@@ -345,127 +240,86 @@ export async function POST(req: Request) {
             basePointsPerActivity: true,
             weeklyStreakBonus: true,
             perfectWeekBonus: true,
-            allowedActivityTypeLinks: {
-              select: {
-                activityCategoryId: true,
-              },
-            },
+            minDuration: true,
+            allowedActivityTypeLinks: { select: { activityCategoryId: true } },
             maxScoreableMinutesPerActivity: true,
           },
         });
 
         const candidateSeasons = candidateSeasonsRaw as CandidateSeasonEntry[];
         const createdScoreEvents: CreatedScoreEventEntry[] = [];
-        const seasonsToPostProcess: SeasonPostProcessingEntry[] = [];
+        const seasonsForRecalc: Array<{ seasonId: string; weeklyGoal: number }> = [];
 
         for (const season of candidateSeasons) {
-          const allowedCategoryIds = normalizeAllowedActivityCategoryIds(
-            season.allowedActivityTypeLinks
-          );
-
-          if (
-            allowedCategoryIds.length > 0 &&
-            !allowedCategoryIds.includes(activityCategory.id)
-          ) {
+          const allowedCategoryIds = normalizeAllowedActivityCategoryIds(season.allowedActivityTypeLinks);
+          if (allowedCategoryIds.length > 0 && !allowedCategoryIds.includes(activityCategory.id)) {
             continue;
           }
 
-          const previousLinkedActivitiesRaw = await tx.activitySeason.findMany({
-            where: {
-              seasonId: season.id,
-              activity: {
-                userId: user.id,
-                isDeleted: false,
-                startedAt: {
-                  lt: s,
-                },
-              },
-            },
-            select: {
-              activity: {
-                select: {
-                  startedAt: true,
-                },
-              },
-            },
-          });
+          // ── Raw SQL replaces N+1 Prisma nested-relation query ─────────────
+          // Old: activitySeason.findMany({ activity: { ...filter } }) → 1+N queries
+          // New: JOIN query → 1 query. Also computes MAX(startedAt) for comeback
+          //      bonus, eliminating the separate activity.findFirst query.
+          const prevRowsRaw: PrevWeekRow[] = await tx.$queryRaw`
+            SELECT
+              DATE_SUB(DATE(a.startedAt),
+                INTERVAL ((DAYOFWEEK(a.startedAt) - 2 + 7) % 7) DAY) AS weekStart,
+              COUNT(*)           AS weekCount,
+              MAX(a.startedAt)   AS maxStartedAt
+            FROM activityseason acs
+            JOIN activity a ON acs.activityId = a.id
+            WHERE acs.seasonId = ${season.id}
+              AND a.userId    = ${user.id}
+              AND a.isDeleted = 0
+              AND a.startedAt < ${s}
+            GROUP BY weekStart
+            ORDER BY weekStart ASC
+          `;
 
-          const previousLinkedActivities =
-            previousLinkedActivitiesRaw as PreviousLinkedActivityEntry[];
+          const previousWeekCounts = new Map<string, number>();
+          let lastPrevDate: Date | null = null;
 
-          const previousDates: Date[] = [];
-          for (const entry of previousLinkedActivities) {
-            previousDates.push(entry.activity.startedAt);
+          for (const row of prevRowsRaw) {
+            const ws = toDate(row.weekStart);
+            if (ws) previousWeekCounts.set(ws.toISOString().slice(0, 10), Number(row.weekCount));
+            if (row.maxStartedAt) {
+              const d = toDate(row.maxStartedAt);
+              if (d && (!lastPrevDate || d.getTime() > lastPrevDate.getTime())) {
+                lastPrevDate = d;
+              }
+            }
           }
-
-          const previousWeekCounts = buildWeekCounts(previousDates);
 
           const currentActiveWeekStreak = getCurrentConsecutiveWeekStreak(
             previousWeekCounts,
             (count) => count >= 1,
             s
           );
-
           const currentPerfectWeekStreak = getCurrentConsecutiveWeekStreak(
             previousWeekCounts,
             (count) => count >= season.weeklyGoal,
             s
           );
-
-          const previousActivity = await tx.activity.findFirst({
-            where: {
-              userId: user.id,
-              isDeleted: false,
-              startedAt: { lt: s },
-              activitySeasons: {
-                some: {
-                  seasonId: season.id,
-                },
-              },
-            },
-            orderBy: {
-              startedAt: "desc",
-            },
-            select: {
-              startedAt: true,
-            },
-          });
-
-          const daysSincePreviousActivity = previousActivity
-            ? diffInFullDays(s, previousActivity.startedAt)
-            : null;
+          const daysSincePreviousActivity = lastPrevDate ? diffInFullDays(s, lastPrevDate) : null;
 
           const score = calculateActivityScore({
-            activity: {
-              id: activity.id,
-              type: normalizedType,
-              startedAt: s,
-              endedAt: e,
-              durationMinutes,
-            },
+            activity: { id: activity.id, type: normalizedType, startedAt: s, endedAt: e, durationMinutes },
             season: {
               id: season.id,
               weeklyGoal: season.weeklyGoal,
               basePointsPerActivity: season.basePointsPerActivity,
               allowedActivityTypes: [activityCategory.slug],
-              maxScoreableMinutesPerActivity:
-                season.maxScoreableMinutesPerActivity,
+              maxScoreableMinutesPerActivity: season.maxScoreableMinutesPerActivity,
+              minDuration: season.minDuration,
             },
             currentActiveWeekStreak,
             currentPerfectWeekStreak,
             daysSincePreviousActivity,
           });
 
-          if (!score.eligible || score.totalPoints <= 0) {
-            continue;
-          }
+          if (!score.eligible || score.totalPoints <= 0) continue;
 
-          await tx.activitySeason.create({
-            data: {
-              activityId: activity.id,
-              seasonId: season.id,
-            },
-          });
+          await tx.activitySeason.create({ data: { activityId: activity.id, seasonId: season.id } });
 
           await tx.scoreEvent.create({
             data: {
@@ -485,75 +339,57 @@ export async function POST(req: Request) {
             },
           });
 
-          createdScoreEvents.push({
-            seasonId: season.id,
-            points: score.totalPoints,
-          });
-
-          seasonsToPostProcess.push({
-            seasonId: season.id,
-            weeklyGoal: season.weeklyGoal,
-          });
+          createdScoreEvents.push({ seasonId: season.id, points: score.totalPoints });
+          seasonsForRecalc.push({ seasonId: season.id, weeklyGoal: season.weeklyGoal });
         }
 
-        return {
-          ok: true,
-          activityId: activity.id,
-          createdScoreEvents,
-          seasonsToPostProcess,
-        };
+        return { activityId: activity.id, createdScoreEvents, seasonsForRecalc };
       },
-      {
-        timeout: 15000,
-        maxWait: 5000,
-      }
+      { timeout: 15000, maxWait: 5000 }
     );
 
-    for (const season of result.seasonsToPostProcess) {
-      const recalculatedWeeks = await recalculateSeasonWeekProgress({
-        tx: prisma,
-        seasonId: season.seasonId,
-        userId: user.id,
-        weeklyGoal: season.weeklyGoal,
-      });
+    const tTx = Date.now();
+    console.log(
+      `[activity/create] tx ${tTx - t0}ms — ${result.seasonsForRecalc.length} season(s) to recalc`
+    );
 
-      await prisma.scoreEvent.deleteMany({
-        where: {
-          seasonId: season.seasonId,
-          userId: user.id,
-          type: {
-            in: ["weekly_streak_bonus", "perfect_week_bonus"],
-          },
-        },
-      });
-
-      for (const week of recalculatedWeeks) {
-        await applyWeeklyBonuses({
-          tx: prisma,
-          seasonId: season.seasonId,
-          userId: user.id,
-          weekStart: week.weekStart,
-        });
-      }
-    }
+    // ── Fire-and-forget recalculation ────────────────────────────────────────
+    // Respond immediately. Scoring runs in the background in the same Node.js
+    // process. Safe for long-lived servers (next start). For Vercel/serverless
+    // use waitUntil from @vercel/functions instead.
+    void runScoringAsync(user.id, result.seasonsForRecalc, t0);
 
     return NextResponse.json(
-      {
-        ok: result.ok,
-        activityId: result.activityId,
-        createdScoreEvents: result.createdScoreEvents,
-      },
+      { ok: true, activityId: result.activityId, createdScoreEvents: result.createdScoreEvents },
       { status: 201 }
     );
   } catch (err) {
     if (err instanceof ActivityCreateHttpError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-
     console.error("/api/activities/create error:", err);
-    return NextResponse.json(
-      { error: "Error creating activity" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error creating activity" }, { status: 500 });
+  }
+}
+
+async function runScoringAsync(
+  userId: string,
+  seasons: Array<{ seasonId: string; weeklyGoal: number }>,
+  t0: number
+) {
+  const tStart = Date.now();
+  try {
+    for (const season of seasons) {
+      await recalculateUserSeasonScoring({
+        db: prisma,
+        userId,
+        seasonId: season.seasonId,
+        weeklyGoal: season.weeklyGoal,
+        label: "create",
+      });
+    }
+    console.log(`[activity/create] async scoring done ${Date.now() - tStart}ms | wall ${Date.now() - t0}ms`);
+  } catch (err) {
+    console.error("[activity/create] async scoring failed:", err);
   }
 }

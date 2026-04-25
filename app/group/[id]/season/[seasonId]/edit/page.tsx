@@ -47,6 +47,7 @@ export default async function EditSeasonPage({
       startDate: true,
       endDate: true,
       weeklyGoal: true,
+      minDuration: true,
       allowedActivityTypeLinks: {
         select: {
           activityCategoryId: true,
@@ -87,6 +88,7 @@ export default async function EditSeasonPage({
             initialStartDate={toDateInputValue(season.startDate)}
             initialEndDate={toDateInputValue(season.endDate)}
             initialWeeklyGoal={season.weeklyGoal}
+            initialMinDuration={season.minDuration ?? 1}
             initialAllowedActivityCategoryIds={season.allowedActivityTypeLinks.map(
               (item: { activityCategoryId: string }) => item.activityCategoryId
             )}
