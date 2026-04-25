@@ -11,12 +11,12 @@
 
 import { addDays } from "./weekUtils";
 
-const PERFECT_WEEK_BONUS = 100;
+const PERFECT_WEEK_BONUS = 0;
 
 function getWeeklyStreakBonusPoints(streakCount: number): number {
-  if (streakCount >= 6) return 150;
-  if (streakCount >= 4) return 100;
-  if (streakCount >= 2) return 50;
+  //if (streakCount >= 6) return 150;
+  //if (streakCount >= 4) return 100;
+  //if (streakCount >= 2) return 50;
   return 0;
 }
 

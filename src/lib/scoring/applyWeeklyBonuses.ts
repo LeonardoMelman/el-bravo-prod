@@ -6,9 +6,9 @@ type Params = {
 };
 
 function getWeeklyStreakBonusPoints(streakCount: number) {
-  if (streakCount >= 6) return 150;
-  if (streakCount >= 4) return 100;
-  if (streakCount >= 2) return 50;
+  //if (streakCount >= 6) return 150;
+  //if (streakCount >= 4) return 100;
+  //if (streakCount >= 2) return 50;
   return 0;
 }
 
@@ -80,7 +80,7 @@ export async function applyWeeklyBonuses({
         activityId: null,
         weekStart,
         type: "perfect_week_bonus",
-        points: 100,
+        points: 0,
         reason: "Bonus por semana perfecta",
         metadata: {
           perfectWeek: true,
